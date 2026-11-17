@@ -6,7 +6,9 @@ Aplicação web simples para ajudar escolas a acompanhar o estoque da merenda, o
 
 Abra `index.html` em um navegador moderno. Não é necessário instalar dependências nem configurar um servidor. O sistema vem com duas escolas e dados de demonstração; use o seletor no topo para alternar entre elas.
 
-Os cadastros e as movimentações ficam salvos no armazenamento local do navegador. Entradas e saídas atualizam o estoque na hora. Ao abrir o sistema em uma nova data, o consumo diário estimado é baixado automaticamente para cada alimento, usando o número de alunos e o consumo médio por aluno.
+Os cadastros e as movimentações ficam salvos no armazenamento local do navegador e continuam disponíveis ao fechar e reabrir o app no mesmo dispositivo e perfil do navegador. Entradas e saídas atualizam o estoque na hora. Ao abrir o sistema em uma nova data, o consumo diário estimado é baixado automaticamente para cada alimento, usando o número de alunos e o consumo médio por aluno.
+
+Esse armazenamento é local: os dados não são sincronizados entre dispositivos nem isolados por conta de usuário. Para sincronização entre usuários/dispositivos e controle de acesso, é necessário adicionar autenticação real e um backend; conectar a conta Google nesta versão altera apenas o nome exibido.
 
 ## App Android e iOS com Capacitor
 
