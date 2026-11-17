@@ -588,3 +588,18 @@ h1 { color: #0f172a; font-size: 25px; letter-spacing: -.7px; }
   .mobile-tab { color: #c1d8ca; }
   .mobile-tab.active { background: #174936; color: #86efac; }
 }
+
+@media (max-width: 680px) {
+  .dashboard-grid, .lower-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-grid, .lower-grid, .lower-grid > .panel, .attention-card, .section-spacer {
+    min-width: 0;
+  }
+  .attention-product {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, .7fr));
+  }
+  .attention-product > :nth-child(4) { display: none; }
+  .attention-product-name, .attention-metric { min-width: 0; overflow-wrap: anywhere; }
+  .reports-toolbar { align-items: stretch; }
+  .reports-toolbar .toolbar-left, .reports-toolbar .toolbar-right { width: 100%; }
+  .reports-toolbar .filter-select, .reports-toolbar .secondary-button { width: 100%; justify-content: center; }
+}
