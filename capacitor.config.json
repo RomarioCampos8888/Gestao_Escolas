@@ -1,0 +1,10 @@
+{
+  "appId": "br.com.merendafacil.app",
+  "appName": "Merenda Fácil",
+  "webDir": "www",
+  "backgroundColor": "#f8fafc",
+  "loggingBehavior": "none",
+  "android": {
+    "allowMixedContent": false
+  }
+}

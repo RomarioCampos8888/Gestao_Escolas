@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f8fafc" />
+    <meta name="description" content="Merenda Fácil — saiba em segundos quantos dias de alimentação sua escola ainda possui." />
+    <meta name="google-signin-client_id" content="COLE_SEU_CLIENT_ID.apps.googleusercontent.com" />
+    <title>Merenda Fácil — Gestão de alimentação escolar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://accounts.google.com/gsi/client" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-inner">
+        <a class="brand" href="#" aria-label="Merenda Fácil, início">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 40 40"><path d="M8 21.5 20 9l12 12.5v10a1.5 1.5 0 0 1-1.5 1.5h-21A1.5 1.5 0 0 1 8 31.5z"/><path d="M15 33V21h10v12M6 17 20 4l14 13M12 12V7h5"/></svg>
+          </span>
+          <span class="brand-name">merenda<span>fácil</span><small>GESTÃO ESCOLAR</small></span>
+        </a>
+        <div class="school-switch">
+          <span class="school-switch-icon" data-icon="school"></span>
+          <div class="school-select-wrap">
+            <label for="school-select">ESCOLA SELECIONADA</label>
+            <select id="school-select" aria-label="Selecionar escola"></select>
+          </div>
+          <span class="school-student-count" id="school-student-count"></span>
+          <span class="select-chevron" data-icon="chevron"></span>
+        </div>
+        <div class="header-actions">
+          <button class="primary-button header-movement-button" data-action="new-movement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Nova Movimentação</button>
+          <span class="today-label" id="today-label"></span>
+          <button class="icon-button notification-button" aria-label="Notificações" id="notification-button">
+            <span data-icon="bell"></span><i id="notification-dot"></i>
+          </button>
+          <div class="account-area">
+            <div class="account-copy"><strong id="user-name">Mariana Alves</strong><small id="user-email">Responsável escolar</small></div>
+            <span class="top-avatar" id="top-avatar">MA</span>
+            <div class="google-auth" id="google-auth"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="primary-nav" aria-label="Navegação principal">
+      <div class="nav-inner">
+        <button class="nav-link active" data-page="dashboard"><span class="nav-icon" data-icon="grid"></span> Painel</button>
+        <button class="nav-link" data-page="inventory"><span class="nav-icon" data-icon="box"></span> Alimentos</button>
+        <button class="nav-link" data-page="movements"><span class="nav-icon" data-icon="arrows"></span> Movimentações</button>
+        <button class="nav-link" data-page="purchases"><span class="nav-icon" data-icon="cart"></span> O Que Comprar? <span class="nav-count" id="purchase-count">0</span></button>
+        <button class="nav-link" data-page="reports"><span class="nav-icon" data-icon="chart"></span> Relatórios</button>
+        <button class="nav-link" data-page="registers"><span class="nav-icon" data-icon="settings"></span> Cadastros</button>
+      </div>
+    </nav>
+    <main class="main-area">
+      <section class="page-content" id="page-content" aria-live="polite"></section>
+    </main>
+    <nav class="mobile-tab-bar" aria-label="Navegação mobile">
+      <button class="mobile-tab active" data-page="dashboard"><span data-icon="grid"></span><small>Painel</small></button>
+      <button class="mobile-tab" data-page="inventory"><span data-icon="box"></span><small>Alimentos</small></button>
+      <button class="mobile-tab" data-page="movements"><span data-icon="arrows"></span><small>Movimentações</small></button>
+      <button class="mobile-tab" data-page="purchases"><span data-icon="cart"></span><small>Compras</small></button>
+      <button class="mobile-tab" data-page="reports"><span data-icon="chart"></span><small>Relatórios</small></button>
+      <button class="mobile-tab" data-page="registers"><span data-icon="settings"></span><small>Cadastros</small></button>
+    </nav>
+    <div id="modal-root"></div>
+    <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  </body>
+</html>
