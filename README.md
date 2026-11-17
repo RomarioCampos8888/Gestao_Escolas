@@ -58,5 +58,6 @@ O Google Identity Services configurado acima é o fluxo web. Para oferecer login
 - **Dias de merenda disponíveis:** menor número de dias restantes entre os alimentos com consumo informado, destacando o item que pode limitar o cardápio.
 - **Previsão de compras:** consumo diário × dias letivos do próximo mês; do total previsto é subtraído o estoque disponível.
 - **Alertas:** estoque abaixo do mínimo, validade vencida ou em até 30 dias, menos de 7 dias de estoque e ausência de movimentação por mais de 60 dias.
+- **Situação do painel:** crítico abaixo de 7 dias, atenção de 7 a 30 dias e estável acima de 30 dias. O gráfico compara as saídas registradas nos últimos 30 dias com a previsão mensal de cada alimento.
 
 O slogan do produto é: “Merenda Fácil — Saiba em segundos quantos dias de alimentação sua escola ainda possui.”

@@ -123,13 +123,15 @@ function daysRemaining(product, school = currentSchool()) {
   const daily = dailyConsumption(product, school);
   return daily > 0 ? Math.max(0, Number(product.stock || 0)) / daily : Infinity;
 }
+function isDaysBelow(days, threshold) { return days < threshold - 1e-9; }
+function isDaysAtMost(days, threshold) { return days <= threshold + 1e-9; }
 function productStatus(product) {
   const today = isoDate(new Date());
   const expiryDays = product.expiration ? Math.ceil((new Date(`${product.expiration}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000) : Infinity;
   if (expiryDays < 0) return { label: "Vencido", className: "danger" };
   if (Number(product.stock) < Number(product.minimum)) return { label: "Estoque baixo", className: "danger" };
-  if (daysRemaining(product) < 7) return { label: "Crítico", className: "danger" };
-  if (expiryDays <= 30) return { label: "Vence em breve", className: "warn" };
+  if (isDaysBelow(daysRemaining(product), 7)) return { label: "Crítico", className: "danger" };
+  if (isDaysAtMost(daysRemaining(product), 30) || expiryDays <= 30) return { label: "Atenção", className: "warn" };
   return { label: "Seguro", className: "good" };
 }
 function alertItems(products = productsForSchool()) {
@@ -164,8 +166,29 @@ function productsNeedingAttention() {
   return productsForSchool().filter((product) => {
     const remaining = daysRemaining(product);
     const expiry = product.expiration ? (new Date(`${product.expiration}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000 : Infinity;
-    return product.stock < product.minimum || remaining < 7 || (expiry >= 0 && expiry <= 30) || expiry < 0;
+    return product.stock < product.minimum || isDaysBelow(remaining, 7) || isDaysAtMost(remaining, 30) || (expiry >= 0 && expiry <= 30) || expiry < 0;
   }).sort((a, b) => daysRemaining(a) - daysRemaining(b));
+}
+function consumptionLast30Days(products = productsForSchool()) {
+  const school = currentSchool();
+  const productIds = new Set(products.map((product) => product.id));
+  const startDate = daysAgo(29);
+  const endDate = isoDate(new Date());
+  const consumption = new Map();
+  data.movements.forEach((movement) => {
+    if (movement.type !== "saida" || movement.date < startDate || movement.date > endDate || !productIds.has(movement.productId)) return;
+    consumption.set(movement.productId, (consumption.get(movement.productId) || 0) + Number(movement.quantity || 0));
+  });
+  return products.map((product) => {
+    const consumed = consumption.get(product.id) || 0;
+    const monthlyTarget = dailyConsumption(product, school) * school.schoolDays;
+    return {
+      product,
+      consumed,
+      monthlyTarget,
+      progress: monthlyTarget > 0 ? Math.min(100, consumed / monthlyTarget * 100) : 0,
+    };
+  }).sort((a, b) => b.progress - a.progress || b.consumed - a.consumed).slice(0, 5);
 }
 function updateDailyConsumption() {
   const today = isoDate(new Date());
@@ -283,10 +306,12 @@ function renderDashboard() {
   const products = productsForSchool();
   const alerts = alertItems(products);
   const days = schoolDaysAvailable();
-  const condition = days < 7 ? "critical" : days <= 30 ? "warning" : "healthy";
-  const daysStatus = condition === "critical" ? "status-critical" : condition === "warning" ? "status-warning" : "";
+  const condition = isDaysBelow(days, 7) ? "critical" : isDaysAtMost(days, 30) ? "warning" : "healthy";
+  const daysStatus = condition === "critical" ? "status-critical" : condition === "warning" ? "status-warning" : "status-healthy";
   const attentionProducts = productsNeedingAttention();
-  const criticalProducts = products.filter((p) => p.stock < p.minimum || daysRemaining(p) < 7 || (p.expiration && p.expiration < isoDate(new Date())));
+  const criticalProducts = products.filter((p) => productStatus(p).className === "danger");
+  const warningProducts = products.filter((p) => productStatus(p).className === "warn");
+  const safeProducts = products.length - criticalProducts.length - warningProducts.length;
   const lowStock = products.filter((p) => p.stock < p.minimum).length;
   const expiring = products.filter((p) => {
     if (!p.expiration) return false;
@@ -297,22 +322,28 @@ function renderDashboard() {
   const monthlyMeals = school.students * school.schoolDays;
   const purchaseCount = forecastItems().filter((item) => item.purchase > 0).length;
   const tightest = [...products].filter((p) => dailyConsumption(p) > 0).sort((a, b) => daysRemaining(a) - daysRemaining(b))[0];
-  const heroMessage = days < 7 ? "Risco de desabastecimento em menos de 7 dias." : days <= 30 ? "Planeje a reposição dos alimentos nos próximos dias." : `O cardápio atual pode ser mantido por mais ${number(days, 0)} dias.`;
+  const heroStatus = isDaysBelow(days, 7) ? { label: "CRÍTICO", message: "Reposição necessária nesta semana", icon: "warning" } : isDaysAtMost(days, 30) ? { label: "ATENÇÃO", message: "Planeje a reposição dos alimentos", icon: "clock" } : { label: "ESTÁVEL", message: `Estoque suficiente para ${number(days, 0)} dias`, icon: "calendarCheck" };
   const expiringProducts = products.filter((product) => product.expiration && product.expiration >= isoDate(new Date()) && (new Date(`${product.expiration}T00:00:00`) - new Date(`${isoDate(new Date())}T00:00:00`)) / 86400000 <= 30);
   return `${pageHeading("PAINEL DA MERENDA", escapeHTML(school.name), `${escapeHTML(school.city)}, ${escapeHTML(school.state)} · ${number(school.students, 0)} alunos · ${school.schoolDays} dias letivos/mês · Responsável: ${escapeHTML(responsibleName())}`, "")}
     <div class="dashboard-grid">
       <section class="days-card ${daysStatus}">
-        <div class="days-card-content"><div class="eyebrow"><span class="status-dot"></span> DIAS DE MERENDA DISPONÍVEIS</div><div class="days-number">${number(days, 0)} <span>dias</span></div>
-          <div class="days-caption">${escapeHTML(heroMessage)}</div>
-          <div class="days-insight">${icon("leaf")} ${tightest ? `O primeiro alimento a acabar é <strong>${escapeHTML(tightest.name)}</strong> (${number(daysRemaining(tightest))} dias)` : "Cadastre alimentos para ver sua previsão"}</div>
+        <div class="days-card-content">
+          <div class="eyebrow"><span class="status-dot"></span> DIAS DE MERENDA DISPONÍVEIS</div>
+          <div class="days-main"><div class="days-number">${number(days, 0)}<span>DIAS</span></div>
+            <div class="days-situation"><span class="situation-indicator">${icon(heroStatus.icon)}</span><div><span class="situation-label">SITUAÇÃO · ${heroStatus.label}</span><strong>${heroStatus.message}</strong></div></div>
+          </div>
+          <div class="days-footer">
+            <div class="next-item">${tightest ? `<span class="next-item-label">PRÓXIMO ITEM A ACABAR</span><strong>${icon("package")} ${escapeHTML(tightest.name)}</strong><span>${number(daysRemaining(tightest))} dias restantes · ${number(tightest.stock)} ${escapeHTML(tightest.unit)} disponíveis</span>` : `<span class="next-item-label">PRÓXIMO ITEM A ACABAR</span><strong>Cadastre o consumo dos alimentos</strong><span>para ver uma previsão de estoque</span>`}</div>
+            <div class="recommended-action"><span>AÇÃO RECOMENDADA</span><button class="primary-button hero-purchase-button" data-page="purchases">${icon("cart")} Gerar lista de compras</button></div>
+          </div>
         </div>
-        <div class="days-illustration" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M17 45h66l-6 41H23l-6-41Z"/><path d="M13 44c0-12 9-20 21-20 2-10 11-16 21-13 8 2 12 8 13 14 11-1 20 7 20 19"/><path d="M33 59c3 7 8 10 16 10 7 0 13-4 16-10M38 43v-4m24 4v-4"/><path d="M43 69v17m14-17v17"/></svg></div>
       </section>
-      <section class="attention-card"><div class="attention-header"><div class="section-title"><h2>Resumo da merenda</h2></div><span class="attention-total">${alerts.length}</span></div>
-        <div class="summary-item"><span class="summary-item-icon">${icon("warning")}</span><div class="summary-item-copy"><strong>Produtos críticos</strong><small>Estoque baixo ou risco de faltar</small></div><span class="summary-item-count">${criticalProducts.length}</span></div>
-        <div class="summary-item"><span class="summary-item-icon amber">${icon("calendar")}</span><div class="summary-item-copy"><strong>Produtos vencendo</strong><small>Nos próximos 30 dias</small></div><span class="summary-item-count">${expiringProducts.length}</span></div>
-        <div class="summary-item"><span class="summary-item-icon green">${icon("cart")}</span><div class="summary-item-copy"><strong>Compras recomendadas</strong><small>Itens para o próximo mês</small></div><span class="summary-item-count">${purchaseCount}</span></div>
-        <button class="primary-button summary-purchase-button" data-page="purchases">O que preciso comprar? <span aria-hidden="true">→</span></button>
+      <section class="attention-card"><div class="attention-header"><div class="section-title"><h2>Centro de ação</h2></div><span class="attention-total">${alerts.length}</span></div>
+        <div class="summary-item"><span class="summary-item-icon green">${icon("calendarCheck")}</span><div class="summary-item-copy"><strong>Seguro</strong><small>Estoque adequado</small></div><span class="summary-item-count safe-count">${safeProducts}</span></div>
+        <div class="summary-item"><span class="summary-item-icon amber">${icon("clock")}</span><div class="summary-item-copy"><strong>Atenção</strong><small>Planeje uma reposição</small></div><span class="summary-item-count warning-count">${warningProducts.length}</span></div>
+        <div class="summary-item"><span class="summary-item-icon">${icon("warning")}</span><div class="summary-item-copy"><strong>Crítico</strong><small>Exige ação prioritária</small></div><span class="summary-item-count critical-count">${criticalProducts.length}</span></div>
+        <div class="summary-expiring"><span>${icon("calendar")} ${expiringProducts.length} produtos vencendo em até 30 dias</span><span>${purchaseCount} sugestões de compra</span></div>
+        <button class="primary-button summary-purchase-button" data-page="purchases">${icon("cart")} Comprar para o próximo mês</button>
       </section>
     </div>
     <div class="stats-grid">
@@ -331,39 +362,12 @@ function renderDashboard() {
       }).join("")}</div>` : `<div class="empty-state"><strong>Tudo em ordem!</strong>Nenhum alimento precisa de atenção agora.</div>`}
     </section>
     <div class="lower-grid">
-      <section class="panel"><div class="panel-header"><div><h2>Consumo da merenda</h2><p>Saídas e entradas nos últimos 7 dias</p></div><div class="chart-legend"><span class="legend-item"><i class="legend-mark"></i> Saídas</span><span class="legend-item"><i class="legend-mark orange"></i> Entradas</span></div></div>${consumptionChart()}</section>
+      <section class="panel"><div class="panel-header"><div><h2>Consumo dos últimos 30 dias</h2><p>Consumo realizado em relação à previsão mensal</p></div><span class="chart-period">${number(products.length, 0)} alimentos</span></div>${consumptionBars30Days(products)}</section>
       <section class="panel"><div class="panel-header"><div><h2>Últimas movimentações</h2><p>Atividade recente da escola</p></div><button class="text-link" data-page="movements">Ver histórico →</button></div>${movementTable(data.movements.filter((m) => products.some((p) => p.id === m.productId)).slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), false)}</section>
     </div>`;
 }
 function statCard(title, value, foot, iconName, tone = "") {
   return `<article class="stat-card"><div class="stat-top"><span>${title}</span><span class="stat-icon ${tone}">${icon(iconName)}</span></div><div class="stat-value">${value}</div><div class="stat-foot">${foot}</div></article>`;
-}
-function consumptionChart() {
-  const labels = [];
-  const outputs = [];
-  const inputs = [];
-  for (let offset = 6; offset >= 0; offset--) {
-    const date = daysAgo(offset);
-    labels.push(new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""));
-    const daily = data.movements.filter((movement) => movement.date === date && productsForSchool().some((product) => product.id === movement.productId));
-    outputs.push(daily.filter((m) => m.type === "saida").reduce((sum, m) => sum + Number(m.quantity), 0));
-    inputs.push(daily.filter((m) => m.type === "entrada").reduce((sum, m) => sum + Number(m.quantity), 0));
-  }
-  const max = Math.max(10, ...outputs, ...inputs);
-  const makePoints = (values) => values.map((value, i) => `${48 + i * 58},${130 - value / max * 95}`).join(" ");
-  const greenPoints = makePoints(outputs);
-  const goldPoints = makePoints(inputs);
-  const first = greenPoints.split(" ")[0], last = greenPoints.split(" ").at(-1);
-  const coords = first.split(",").map(Number), finalCoords = last.split(",").map(Number);
-  return `<svg class="consumption-chart" viewBox="0 0 430 155" preserveAspectRatio="none" role="img" aria-label="Gráfico de consumo e entradas dos últimos sete dias">
-    <defs><linearGradient id="greenGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#55a573" stop-opacity=".18"/><stop offset="1" stop-color="#55a573" stop-opacity="0"/></linearGradient></defs>
-    <line class="chart-grid" x1="37" y1="32" x2="430" y2="32"/><line class="chart-grid" x1="37" y1="79" x2="430" y2="79"/><line class="chart-grid" x1="37" y1="127" x2="430" y2="127"/>
-    <text class="chart-label" x="0" y="35">${number(max, 0)}</text><text class="chart-label" x="0" y="82">${number(max / 2, 0)}</text><text class="chart-label" x="0" y="130">0</text>
-    <polygon class="chart-area" points="${coords[0]},130 ${greenPoints} ${finalCoords[0]},130"/>
-    <polyline class="chart-line-green" points="${greenPoints}"/><polyline class="chart-line-gold" points="${goldPoints}"/>
-    ${outputs.map((value, i) => `<circle class="chart-dot" cx="${48 + i * 58}" cy="${130 - value / max * 95}" r="3"/>`).join("")}
-    ${labels.map((label, i) => `<text class="chart-label" text-anchor="middle" x="${48 + i * 58}" y="150">${label}</text>`).join("")}
-  </svg>`;
 }
 function productUrgency(products) {
   const urgent = products.filter((product) => dailyConsumption(product) > 0).sort((a, b) => daysRemaining(a) - daysRemaining(b)).slice(0, 4);
@@ -372,6 +376,14 @@ function productUrgency(products) {
     const days = daysRemaining(product);
     const barWidth = Number.isFinite(days) ? Math.min(100, Math.max(5, days / 30 * 100)) : 100;
     return `<div class="product-row"><div><span class="product-name">${escapeHTML(product.name)}</span><span class="product-sub">${number(product.stock)} ${escapeHTML(product.unit)} disponíveis</span><div class="progress-track"><div class="progress-fill ${days < 7 ? "danger" : days > 20 ? "safe" : ""}" style="width:${barWidth}%"></div></div></div><div class="days-left">${Number.isFinite(days) ? number(days) : "—"}<span>dias</span></div></div>`;
+  }).join("")}</div>`;
+}
+function consumptionBars30Days(products = productsForSchool()) {
+  const rows = consumptionLast30Days(products);
+  if (!rows.length) return `<div class="empty-state"><strong>Nenhum alimento cadastrado</strong>Cadastre alimentos para acompanhar o consumo.</div>`;
+  return `<div class="consumption-bars">${rows.map(({ product, consumed, monthlyTarget, progress }) => {
+    const fillClass = progress > 100 ? "over-target" : "";
+    return `<div class="consumption-bar-row"><div class="consumption-bar-heading"><strong>${escapeHTML(product.name)}</strong><span>${number(consumed)} ${escapeHTML(product.unit)} <small>de ${number(monthlyTarget)} ${escapeHTML(product.unit)}</small></span></div><div class="consumption-bar-track" role="progressbar" aria-label="Consumo de ${escapeHTML(product.name)} em relação à previsão mensal" aria-valuenow="${Math.round(progress)}" aria-valuemin="0" aria-valuemax="100"><span class="${fillClass}" style="width:${Math.max(0, Math.min(100, progress))}%"></span></div><span class="consumption-bar-caption">${consumed > 0 ? `${number(progress, 0)}% da previsão mensal` : "Sem saídas registradas nos últimos 30 dias"}</span></div>`;
   }).join("")}</div>`;
 }
 function movementTable(movements, actions = true) {
