@@ -556,3 +556,35 @@ h1 { color: #0f172a; font-size: 25px; letter-spacing: -.7px; }
   .consumption-bars { gap: 17px; }
   .consumption-bar-track { height: 10px; }
 }
+
+.app-header, .primary-nav { background: #062e1f; border-color: #174936; }
+.brand-name { color: #f0fdf4; }
+.brand-name > span { color: #86efac; }
+.brand-name small { color: #b7d5c3; }
+.brand-mark { background: #174936; }
+.brand-mark svg { stroke: #86efac; }
+.school-switch { border-color: #174936; }
+.school-switch label, .today-label { color: #b7d5c3; }
+.school-switch select { color: #f0fdf4; }
+.school-switch select option { color: #0f172a; background: #fff; }
+.school-switch-icon { background: #174936; color: #86efac; }
+.school-student-count { border-color: #286047; color: #d1fae5; }
+.select-chevron { color: #b7d5c3; }
+.account-area { border-color: #174936; }
+.account-copy strong { color: #f0fdf4; }
+.account-copy small, .google-signout { color: #b7d5c3; }
+.google-connect-button { color: #86efac; }
+.google-connect-button:hover { color: #d1fae5; }
+.icon-button { border-color: #286047; background: #0b3b29; color: #d1fae5; }
+.icon-button:hover { border-color: #4ade80; color: #86efac; }
+.nav-link { color: #c1d8ca; }
+.nav-link:hover { background: #104331; color: #f0fdf4; }
+.nav-link.active { color: #86efac; }
+.nav-link.active::after { background: #4ade80; }
+.nav-count { background: #174936; color: #d1fae5; }
+
+@media (max-width: 680px) {
+  .mobile-tab-bar { border-color: #174936; background: #062e1f; box-shadow: 0 -7px 20px #062e1f24; }
+  .mobile-tab { color: #c1d8ca; }
+  .mobile-tab.active { background: #174936; color: #86efac; }
+}
