@@ -74,7 +74,7 @@ function demoData() {
     { id: "m-5", date: daysAgo(4), productId: "p-pasta", type: "saida", quantity: 22, reason: "Preparo das refeições", note: "" },
     { id: "m-6", date: daysAgo(72), productId: "p-oil", type: "entrada", quantity: 40, unitPrice: 7.3, supplier: "Atacado Central", reason: "Reposição", note: "" },
   ];
-  return { schools, categories, products, movements, lastDailyDeduction: isoDate(new Date()), selectedSchoolId: schools[0].id };
+  return { schools, categories, products, movements, preparations: [], menuPlans: [], lastDailyDeduction: isoDate(new Date()), selectedSchoolId: schools[0].id };
 }
 
 function loadData() {
@@ -83,6 +83,8 @@ function loadData() {
     if (!saved) return demoData();
     const parsed = JSON.parse(saved);
     if (!parsed.schools?.length || !Array.isArray(parsed.products) || !Array.isArray(parsed.movements)) return demoData();
+    parsed.preparations = Array.isArray(parsed.preparations) ? parsed.preparations : [];
+    parsed.menuPlans = Array.isArray(parsed.menuPlans) ? parsed.menuPlans : [];
     return parsed;
   } catch (error) {
     console.error("Não foi possível carregar os dados salvos do Merenda Fácil.", error);
@@ -97,6 +99,10 @@ let categoryFilter = "todas";
 let reportFilter = "30";
 let movementFilters = { type: "todos", productId: "todos", from: "", to: "" };
 let googleUser = null;
+let menuSection = "planning";
+let menuMonth = isoDate(new Date()).slice(0, 7);
+let menuView = "month";
+let menuFocusDate = isoDate(new Date());
 
 function saveData() {
   try {
@@ -289,7 +295,7 @@ function render() {
   document.getElementById("purchase-count").textContent = purchases;
   const today = new Date();
   document.getElementById("today-label").textContent = today.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" }).replace(".", "");
-  const renderer = { dashboard: renderDashboard, inventory: renderInventory, movements: renderMovements, purchases: renderPurchases, reports: renderReports, registers: renderRegisters }[activePage];
+  const renderer = { dashboard: renderDashboard, inventory: renderInventory, movements: renderMovements, purchases: renderPurchases, menu: renderMenu, reports: renderReports, registers: renderRegisters }[activePage];
   document.getElementById("page-content").innerHTML = renderer();
   document.getElementById("notification-dot").style.display = alertItems().length ? "block" : "none";
   renderGoogleAuth();
@@ -321,6 +327,9 @@ function renderDashboard() {
   const todayMovements = data.movements.filter((movement) => movement.date === isoDate(new Date()) && products.some((product) => product.id === movement.productId)).length;
   const monthlyMeals = school.students * school.schoolDays;
   const purchaseCount = forecastItems().filter((item) => item.purchase > 0).length;
+  const monthMenu = menuPlansForMonth(menuMonth);
+  const menuNeeds = menuConsumption(menuMonth).filter((item) => item.purchase > 0);
+  const menuCoveredCount = menuConsumption(menuMonth).filter((item) => item.status === "good").length;
   const tightest = [...products].filter((p) => dailyConsumption(p) > 0).sort((a, b) => daysRemaining(a) - daysRemaining(b))[0];
   const heroStatus = isDaysBelow(days, 7) ? { label: "CRÍTICO", message: "Reposição necessária nesta semana", icon: "warning" } : isDaysAtMost(days, 30) ? { label: "ATENÇÃO", message: "Planeje a reposição dos alimentos", icon: "clock" } : { label: "ESTÁVEL", message: `Estoque suficiente para ${number(days, 0)} dias`, icon: "calendarCheck" };
   const expiringProducts = products.filter((product) => product.expiration && product.expiration >= isoDate(new Date()) && (new Date(`${product.expiration}T00:00:00`) - new Date(`${isoDate(new Date())}T00:00:00`)) / 86400000 <= 30);
@@ -353,7 +362,12 @@ function renderDashboard() {
       ${statCard("Movimentações hoje", todayMovements, "entradas e saídas", "arrows", "blue")}
       ${statCard("Refeições previstas", `${number(monthlyMeals, 0)} <small>refeições</small>`, `${school.students} alunos × ${school.schoolDays} dias letivos`, "chart")}
       ${statCard("Previsão de compras", purchaseCount, "itens para o próximo mês", "cart", purchaseCount ? "amber" : "")}
+      ${statCard("Refeições planejadas", monthMenu.length, "no calendário deste mês", "calendar")}
+      ${statCard("Preparações cadastradas", preparationsForSchool().length, "receitas ativas", "leaf")}
+      ${statCard("Cardápio coberto", menuCoveredCount, "ingredientes suficientes", "calendarCheck", menuNeeds.length ? "amber" : "")}
+      ${statCard("Itens para comprar", menuNeeds.length, "para cumprir o cardápio", "cart", menuNeeds.length ? "red" : "")}
     </div>
+    <section class="panel menu-dashboard-link"><div class="panel-header"><div><h2>Cardápio Escolar</h2><p>Planeje refeições e confira o impacto no estoque.</p></div><button class="primary-button" data-page="menu">${icon("calendar")} Abrir planejamento</button></div></section>
     <section class="panel attention-panel"><div class="panel-header"><div><h2>Produtos que exigem atenção</h2><p>Priorize o que pode faltar ou vencer primeiro</p></div><button class="text-link" data-page="inventory">Ver todos os alimentos →</button></div>
       ${attentionProducts.length ? `<div class="attention-list">${attentionProducts.slice(0, 6).map((product) => {
         const remaining = daysRemaining(product);
@@ -458,6 +472,165 @@ function renderRegisters() {
     </div>`;
 }
 
+function preparationsForSchool(includeInactive = false) {
+  return (data.preparations || []).filter((item) => item.schoolId === currentSchool()?.id && (includeInactive || item.active));
+}
+function menuPlansForMonth(month = menuMonth) {
+  return (data.menuPlans || []).filter((item) => item.schoolId === currentSchool()?.id && item.date.startsWith(month))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.shift.localeCompare(b.shift));
+}
+function menuPeriod(month, period = "month") {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (period === "week") {
+    const focus = new Date(`${menuFocusDate}T12:00:00`);
+    const start = new Date(focus);
+    start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start: isoDate(start), end: isoDate(end), days: 7 };
+  }
+  const start = `${month}-01`;
+  const end = isoDate(new Date(year, monthNumber, 0));
+  return { start, end, days: new Date(year, monthNumber, 0).getDate() };
+}
+function convertIngredientQuantity(ingredient, product) {
+  const quantity = Number(ingredient.quantity);
+  if (ingredient.unit === product.unit) return quantity;
+  const conversions = {
+    Kg: { g: 0.001 },
+    g: { Kg: 1000 },
+    Litro: { mL: 0.001 },
+    mL: { Litro: 1000 },
+  };
+  const factor = conversions[product.unit]?.[ingredient.unit];
+  if (factor) return quantity * factor;
+  throw new Error(`A unidade ${ingredient.unit} não é compatível com ${product.name} (${product.unit}).`);
+}
+function menuConsumption(month = menuMonth, period = "month") {
+  const { start, end, days } = menuPeriod(month, period);
+  const plans = (data.menuPlans || []).filter((item) => item.schoolId === currentSchool()?.id && item.date >= start && item.date <= end);
+  const products = new Map(productsForSchool().map((product) => [product.id, product]));
+  const totals = new Map();
+  plans.forEach((plan) => {
+    const preparation = (data.preparations || []).find((item) => item.id === plan.preparationId && item.schoolId === plan.schoolId);
+    if (!preparation || !Number(preparation.servings)) return;
+    preparation.ingredients.forEach((ingredient) => {
+      const product = products.get(ingredient.productId);
+      if (!product) return;
+      const needed = convertIngredientQuantity(ingredient, product) * Number(currentSchool().students) / Number(preparation.servings);
+      const row = totals.get(product.id) || { product, needed: 0 };
+      row.needed += needed;
+      totals.set(product.id, row);
+    });
+  });
+  return [...totals.values()].map(({ product, needed }) => {
+    const available = Number(product.stock || 0);
+    const difference = available - needed;
+    const coverageDays = needed > 0 ? available / (needed / days) : Infinity;
+    const status = difference < -1e-9 ? "danger" : difference <= Number(product.minimum || 0) ? "warn" : "good";
+    return { product, needed, available, difference, purchase: Math.max(0, -difference), coverageDays, status };
+  }).sort((a, b) => a.status.localeCompare(b.status) || a.product.name.localeCompare(b.product.name));
+}
+function menuSectionNavigation() {
+  const links = [
+    ["planning", "Planejamento de Cardápio"],
+    ["calendar", "Calendário Alimentar"],
+    ["consumption", "Consumo Previsto"],
+    ["purchases", "Necessidade de Compras"],
+  ];
+  return `<nav class="menu-section-nav" aria-label="Seções do Cardápio Escolar">${links.map(([section, label]) => `<button class="menu-section-link ${menuSection === section ? "active" : ""}" data-menu-section="${section}">${label}</button>`).join("")}</nav>`;
+}
+function menuStatus(status) {
+  return `<span class="badge ${status}">${status === "good" ? "Estoque suficiente" : status === "warn" ? "Próximo do limite" : "Estoque insuficiente"}</span>`;
+}
+function renderMenu() {
+  const monthLabel = new Date(`${menuMonth}-01T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const alerts = menuConsumption(menuMonth).filter((item) => item.status !== "good");
+  let content = "";
+  if (menuSection === "planning") content = renderMenuPlanning();
+  else if (menuSection === "calendar") content = renderMenuCalendar();
+  else if (menuSection === "consumption") content = renderMenuConsumption();
+  else content = renderMenuPurchases();
+  return `${pageHeading("PLANEJAMENTO ALIMENTAR", "Cardápio Escolar", `Planeje as refeições de ${monthLabel} e veja o impacto no estoque.`, "")}
+    ${menuSectionNavigation()}
+    <div class="menu-month-toolbar"><label for="menu-month">Período</label><input id="menu-month" type="month" value="${escapeHTML(menuMonth)}"><span>${menuPlansForMonth().length} refeições planejadas</span></div>
+    ${alerts.length ? `<div class="menu-alert" role="status"><strong>Há ingredientes que precisam de atenção neste período.</strong><span>${alerts.map((item) => escapeHTML(item.product.name)).join(", ")}</span></div>` : ""}
+    ${content}`;
+}
+function renderMenuPlanning() {
+  const preparations = preparationsForSchool(true);
+  return `<div class="menu-toolbar-actions">${button("Nova preparação", "new-preparation")} ${button("Planejar refeição", "new-menu-plan", "secondary", "calendar")}</div>
+    <section class="panel section-spacer"><div class="panel-header"><div><h2>Preparações</h2><p>Receitas vinculadas aos alimentos cadastrados nesta escola.</p></div><span class="summary-label">${preparations.filter((item) => item.active).length} ativas</span></div>
+      ${preparations.length ? `<div class="preparation-grid">${preparations.map((preparation) => `<article class="preparation-card"><div class="preparation-card-top"><div><h3>${escapeHTML(preparation.name)}</h3><span>${number(preparation.servings, 0)} porções por receita · ${preparation.active ? "Ativa" : "Inativa"}</span></div><button class="small-action" data-action="edit-preparation" data-id="${escapeHTML(preparation.id)}">Editar</button></div><p>${escapeHTML(preparation.description || "Sem descrição")}</p>${preparation.method ? `<details class="preparation-method"><summary>Modo de preparo</summary><p>${escapeHTML(preparation.method)}</p></details>` : ""}<div class="preparation-ingredients">${preparation.ingredients.map((ingredient) => {
+        const product = productById(ingredient.productId);
+        return `<span>${escapeHTML(product?.name || "Alimento removido")} · ${number(ingredient.quantity)} ${escapeHTML(ingredient.unit)}</span>`;
+      }).join("")}</div></article>`).join("")}</div>` : `<div class="empty-state"><strong>Cadastre sua primeira preparação</strong>Inclua ingredientes usando os alimentos existentes no estoque.</div>`}
+    </section>
+    <section class="panel section-spacer"><div class="panel-header"><div><h2>Refeições planejadas</h2><p>As quantidades previstas são calculadas proporcionalmente ao número de alunos.</p></div><button class="text-link" data-menu-section="calendar">Abrir calendário →</button></div>${menuPlanList(menuPlansForMonth())}</section>`;
+}
+function renderMenuCalendar() {
+  return `<div class="menu-calendar-toolbar"><div class="menu-view-switch" role="group" aria-label="Visualização do calendário">${[["month", "Mensal"], ["week", "Semanal"], ["list", "Lista"]].map(([view, label]) => `<button class="${menuView === view ? "active" : ""}" data-menu-view="${view}">${label}</button>`).join("")}</div>
+    ${menuView === "week" ? `<div class="week-controls"><button class="secondary-button" data-action="menu-week-prev" aria-label="Semana anterior">←</button><input id="menu-focus-date" type="date" value="${escapeHTML(menuFocusDate)}"><button class="secondary-button" data-action="menu-week-next" aria-label="Próxima semana">→</button></div>` : ""}</div>
+    <section class="panel calendar-panel">${menuView === "list" ? menuPlanList(menuPlansForMonth()) : renderMenuCalendarGrid()}</section>`;
+}
+function renderMenuCalendarGrid() {
+  const weekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+  let dates = [];
+  if (menuView === "week") {
+    const { start } = menuPeriod(menuMonth, "week");
+    const first = new Date(`${start}T12:00:00`);
+    dates = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(first);
+      date.setDate(first.getDate() + index);
+      return isoDate(date);
+    });
+  } else {
+    const [year, month] = menuMonth.split("-").map(Number);
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const offset = (firstDay + 6) % 7;
+    const dayCount = new Date(year, month, 0).getDate();
+    dates = Array.from({ length: Math.ceil((dayCount + offset) / 7) * 7 }, (_, index) => {
+      const date = new Date(year, month - 1, index - offset + 1);
+      return isoDate(date);
+    });
+  }
+  return `<div class="calendar-grid ${menuView === "week" ? "week-view" : ""}">${weekdays.map((day) => `<div class="calendar-weekday">${day}</div>`).join("")}${dates.map((date) => {
+    const plans = (data.menuPlans || []).filter((item) => item.schoolId === currentSchool().id && item.date === date).sort((a, b) => a.shift.localeCompare(b.shift));
+    const isCurrentMonth = date.startsWith(menuMonth);
+    return `<article class="calendar-day ${isCurrentMonth ? "" : "outside-month"}"><div class="calendar-day-heading"><strong>${Number(date.slice(-2))}</strong><button class="calendar-add" data-action="new-menu-plan" data-date="${date}" aria-label="Planejar refeição em ${dateLabel(date)}">+</button></div>${plans.map((plan) => {
+      const preparation = (data.preparations || []).find((item) => item.id === plan.preparationId);
+      return `<button class="calendar-meal" data-action="edit-menu-plan" data-id="${escapeHTML(plan.id)}"><small>${escapeHTML(plan.shift)}</small><strong>${escapeHTML(preparation?.name || "Preparação removida")}</strong></button>`;
+    }).join("")}</article>`;
+  }).join("")}</div>`;
+}
+function menuPlanList(plans) {
+  if (!plans.length) return `<div class="empty-state"><strong>Nenhuma refeição planejada</strong>Use “Planejar refeição” para adicionar uma preparação ao calendário.</div>`;
+  return `<div class="table-wrap"><table class="data-table"><thead><tr><th>DATA</th><th>TURNO</th><th>PREPARAÇÃO</th><th>INGREDIENTES</th><th></th></tr></thead><tbody>${plans.map((plan) => {
+    const preparation = (data.preparations || []).find((item) => item.id === plan.preparationId);
+    return `<tr><td>${dateLabel(plan.date)}</td><td>${escapeHTML(plan.shift)}</td><td>${escapeHTML(preparation?.name || "Preparação removida")}</td><td>${preparation?.ingredients.length || 0} ingredientes</td><td><div class="row-actions"><button class="small-action" data-action="edit-menu-plan" data-id="${escapeHTML(plan.id)}">Editar</button><button class="small-action" data-action="delete-menu-plan" data-id="${escapeHTML(plan.id)}">Remover</button></div></td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+function renderMenuConsumption() {
+  const period = document.getElementById("menu-consumption-period")?.value || "month";
+  const { start, end } = menuPeriod(menuMonth, period);
+  const plans = (data.menuPlans || []).filter((item) => item.schoolId === currentSchool().id && item.date >= start && item.date <= end);
+  const rows = menuConsumption(menuMonth, period);
+  return `<section class="panel"><div class="panel-header"><div><h2>Consumo previsto</h2><p>Estimativa proporcional às porções das receitas e aos ${number(currentSchool().students, 0)} alunos.</p></div><select class="filter-select" id="menu-consumption-period"><option value="month" ${period === "month" ? "selected" : ""}>Mês</option><option value="week" ${period === "week" ? "selected" : ""}>Semana de ${dateLabel(menuFocusDate)}</option></select></div>
+    <div class="summary-strip"><div><div class="summary-label">Refeições no período</div><div class="summary-value">${plans.length}</div></div><div><div class="summary-label">Preparações utilizadas</div><div class="summary-value">${new Set(plans.map((item) => item.preparationId)).size}</div></div><div><div class="summary-label">Ingredientes previstos</div><div class="summary-value">${rows.length} alimentos</div></div></div>
+    ${menuConsumptionTable(rows)}</section>`;
+}
+function menuConsumptionTable(rows) {
+  if (!rows.length) return `<div class="empty-state"><strong>Sem consumo previsto</strong>Planeje refeições para calcular os ingredientes necessários.</div>`;
+  return `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>NECESSIDADE PREVISTA</th><th>ESTOQUE ATUAL</th><th>SALDO APÓS CARDÁPIO</th><th>DIAS DE COBERTURA</th><th>STATUS</th></tr></thead><tbody>${rows.map(({ product, needed, available, difference, coverageDays, status }) => `<tr><td>${escapeHTML(product.name)}<span class="table-sub">${escapeHTML(categoryName(product.categoryId))}</span></td><td>${number(needed)} ${escapeHTML(product.unit)}</td><td>${number(available)} ${escapeHTML(product.unit)}</td><td class="${difference < 0 ? "menu-negative" : ""}">${number(difference)} ${escapeHTML(product.unit)}</td><td>${Number.isFinite(coverageDays) ? `${number(coverageDays)} dias` : "—"}</td><td>${menuStatus(status)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function renderMenuPurchases() {
+  const rows = menuConsumption(menuMonth);
+  const needs = rows.filter((item) => item.purchase > 0);
+  return `<div class="purchase-callout"><div><strong>Compras para cumprir o cardápio de ${new Date(`${menuMonth}-01T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</strong><p>Estimativa calculada com as preparações planejadas e o estoque atual.</p></div><div class="purchase-total">${needs.length}<small>alimentos para comprar</small></div></div>
+    <section class="panel"><div class="summary-strip"><div><div class="summary-label">Itens suficientes</div><div class="summary-value">${rows.filter((item) => item.status === "good").length}</div></div><div><div class="summary-label">Próximos do limite</div><div class="summary-value">${rows.filter((item) => item.status === "warn").length}</div></div><div><div class="summary-label">Insuficientes</div><div class="summary-value">${needs.length}</div></div></div>
+    ${needs.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>ESTOQUE ATUAL</th><th>NECESSIDADE DO PERÍODO</th><th>QUANTIDADE A COMPRAR</th></tr></thead><tbody>${needs.map(({ product, available, needed, purchase }) => `<tr><td>${escapeHTML(product.name)}<span class="table-sub">${escapeHTML(product.supplier || "Fornecedor não informado")}</span></td><td>${number(available)} ${escapeHTML(product.unit)}</td><td>${number(needed)} ${escapeHTML(product.unit)}</td><td><strong>${number(purchase)} ${escapeHTML(product.unit)}</strong></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><strong>O estoque cobre o cardápio planejado.</strong>Não há compras previstas para este período.</div>`}</section>`;
+}
+
 function field(label, name, value = "", type = "text", options = null, required = false, extra = "") {
   const requiredAttr = required ? "required" : "";
   let control;
@@ -474,11 +647,116 @@ function openModal(title, subtitle, body, onSubmit, submitLabel = "Salvar") {
   root.querySelector("#modal-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = Object.fromEntries(new FormData(event.currentTarget).entries());
+    formData.active = Boolean(event.currentTarget.querySelector('[name="active"]')?.checked);
+    formData.ingredients = [...event.currentTarget.querySelectorAll(".ingredient-row")].map((row) => ({
+      productId: row.querySelector("[data-ingredient-product]").value,
+      quantity: row.querySelector("[data-ingredient-quantity]").value,
+      unit: row.querySelector("[data-ingredient-unit]").value,
+    }));
     onSubmit(formData);
   });
   root.querySelector("input, select, textarea")?.focus();
 }
 function closeModal() { document.getElementById("modal-root").innerHTML = ""; }
+function ingredientUnitOptions(product) {
+  const units = [product.unit];
+  if (product.unit === "Kg") units.push("g");
+  if (product.unit === "Litro") units.push("mL");
+  return units;
+}
+function ingredientRow(ingredient = {}) {
+  const products = productsForSchool();
+  const product = products.find((item) => item.id === ingredient.productId) || products[0];
+  if (!product) return "";
+  const units = ingredientUnitOptions(product);
+  const selectedUnit = units.includes(ingredient.unit) ? ingredient.unit : product.unit;
+  return `<div class="ingredient-row"><select aria-label="Alimento" data-ingredient-product>${products.map((item) => `<option value="${escapeHTML(item.id)}" ${item.id === product.id ? "selected" : ""}>${escapeHTML(item.name)} (${escapeHTML(item.unit)})</option>`).join("")}</select><input aria-label="Quantidade" data-ingredient-quantity type="number" min="0.001" step="0.001" value="${escapeHTML(ingredient.quantity ?? "")}" placeholder="Quantidade" required><select aria-label="Unidade" data-ingredient-unit>${units.map((unit) => `<option value="${escapeHTML(unit)}" ${unit === selectedUnit ? "selected" : ""}>${escapeHTML(unit)}</option>`).join("")}</select><button class="small-action" type="button" data-action="remove-ingredient" aria-label="Remover ingrediente">Remover</button></div>`;
+}
+function newPreparation(preparation = null) {
+  const products = productsForSchool();
+  if (!products.length) {
+    showToast("Cadastre alimentos nesta escola antes de criar uma preparação.", true);
+    return;
+  }
+  const ingredients = preparation?.ingredients?.length ? preparation.ingredients : [{}];
+  const body = `<div class="form-grid">${field("Nome da preparação", "name", preparation?.name || "", "text", null, true)}${field("Porções produzidas", "servings", preparation?.servings ?? "", "number", null, true, 'min="1" step="1"')}
+    <div class="form-field full"><label>Descrição</label><textarea name="description" placeholder="Descreva a preparação">${escapeHTML(preparation?.description || "")}</textarea></div>
+    <div class="form-field full"><label>Modo de preparo</label><textarea name="method" placeholder="Informe o modo de preparo">${escapeHTML(preparation?.method || "")}</textarea></div>
+    <div class="form-field full"><div class="ingredient-heading"><label>Ingredientes</label><button class="text-link" type="button" data-action="add-ingredient">+ Adicionar ingrediente</button></div><div class="ingredient-rows">${ingredients.map((item) => ingredientRow(item)).join("")}</div></div>
+    <label class="preparation-active"><input type="checkbox" name="active" ${preparation?.active === false ? "" : "checked"}> Preparação ativa</label></div>`;
+  openModal(preparation ? "Editar preparação" : "Nova preparação", "Os ingredientes precisam usar alimentos já cadastrados nesta escola.", body, (values) => {
+    if (!values.ingredients.length || values.ingredients.some((item) => !item.productId || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0)) {
+      showToast("Adicione ao menos um ingrediente com quantidade válida.", true);
+      return;
+    }
+    try {
+      values.ingredients.forEach((ingredient) => convertIngredientQuantity(ingredient, productById(ingredient.productId)));
+    } catch (error) {
+      showToast(error.message, true);
+      return;
+    }
+    const normalized = {
+      id: preparation?.id || crypto.randomUUID(),
+      schoolId: currentSchool().id,
+      name: values.name.trim(),
+      description: values.description.trim(),
+      method: values.method.trim(),
+      servings: Number(values.servings),
+      active: values.active,
+      ingredients: values.ingredients.map((item) => ({ productId: item.productId, quantity: Number(item.quantity), unit: item.unit })),
+    };
+    if (preparation) Object.assign(preparation, normalized);
+    else (data.preparations ||= []).push(normalized);
+    saveData();
+    closeModal();
+    render();
+    showToast(preparation ? "Preparação atualizada." : "Preparação cadastrada.");
+  });
+  const root = document.getElementById("modal-root");
+  root.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "add-ingredient") {
+      root.querySelector(".ingredient-rows").insertAdjacentHTML("beforeend", ingredientRow());
+    } else if (action === "remove-ingredient") {
+      const rows = root.querySelectorAll(".ingredient-row");
+      if (rows.length === 1) showToast("A preparação precisa ter ao menos um ingrediente.", true);
+      else event.target.closest(".ingredient-row").remove();
+    }
+  });
+  root.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-ingredient-product]")) return;
+    const row = event.target.closest(".ingredient-row");
+    const product = productById(event.target.value);
+    row.querySelector("[data-ingredient-unit]").innerHTML = ingredientUnitOptions(product).map((unit) => `<option value="${escapeHTML(unit)}">${escapeHTML(unit)}</option>`).join("");
+  });
+}
+function newMenuPlan(plan = null, date = menuFocusDate) {
+  const preparations = preparationsForSchool();
+  if (!preparations.length) {
+    showToast("Cadastre uma preparação ativa antes de planejar uma refeição.", true);
+    menuSection = "planning";
+    render();
+    return;
+  }
+  const shifts = ["Manhã", "Tarde", "Integral"].map((item) => ({ value: item, label: item }));
+  const body = `<div class="form-grid">${field("Data", "date", plan?.date || date, "date", null, true)}${field("Turno", "shift", plan?.shift || "Manhã", "select", shifts, true)}${field("Preparação", "preparationId", plan?.preparationId || preparations[0].id, "select", preparations.map((item) => ({ value: item.id, label: item.name })), true)}</div>`;
+  openModal(plan ? "Editar refeição" : "Planejar refeição", "A previsão considera uma porção para cada aluno da escola.", body, (values) => {
+    const duplicate = (data.menuPlans || []).find((item) => item.schoolId === currentSchool().id && item.date === values.date && item.shift === values.shift && item.id !== plan?.id);
+    if (duplicate) {
+      showToast("Já existe uma refeição planejada para esta data e turno.", true);
+      return;
+    }
+    const normalized = { id: plan?.id || crypto.randomUUID(), schoolId: currentSchool().id, date: values.date, shift: values.shift, preparationId: values.preparationId };
+    if (plan) Object.assign(plan, normalized);
+    else (data.menuPlans ||= []).push(normalized);
+    menuFocusDate = values.date;
+    menuMonth = values.date.slice(0, 7);
+    saveData();
+    closeModal();
+    render();
+    showToast("Planejamento atualizado; o consumo previsto foi recalculado.");
+  });
+}
 function newProduct(product = null) {
   const editing = Boolean(product);
   const categories = data.categories.map((cat) => ({ value: cat.id, label: cat.name }));
@@ -552,6 +830,19 @@ function exportMovements() {
 }
 
 document.addEventListener("click", (event) => {
+  const menuSectionButton = event.target.closest("[data-menu-section]");
+  if (menuSectionButton) {
+    menuSection = menuSectionButton.dataset.menuSection;
+    activePage = "menu";
+    render();
+    return;
+  }
+  const menuViewButton = event.target.closest("[data-menu-view]");
+  if (menuViewButton) {
+    menuView = menuViewButton.dataset.menuView;
+    render();
+    return;
+  }
   const nav = event.target.closest("[data-page]");
   const mobileNav = event.target.closest(".mobile-tab[data-page]");
   if (nav || mobileNav) {
@@ -571,6 +862,22 @@ document.addEventListener("click", (event) => {
   else if (action === "new-school") newSchool();
   else if (action === "edit-school") newSchool(data.schools.find((s) => s.id === id));
   else if (action === "new-category") newCategory();
+  else if (action === "new-preparation") newPreparation();
+  else if (action === "edit-preparation") newPreparation((data.preparations || []).find((item) => item.id === id));
+  else if (action === "new-menu-plan") newMenuPlan(null, target.dataset.date || menuFocusDate);
+  else if (action === "edit-menu-plan") newMenuPlan((data.menuPlans || []).find((item) => item.id === id));
+  else if (action === "delete-menu-plan") {
+    if (!window.confirm("Remover esta refeição do planejamento?")) return;
+    data.menuPlans = data.menuPlans.filter((item) => item.id !== id);
+    saveData(); render(); showToast("Refeição removida; o consumo previsto foi recalculado.");
+  }
+  else if (action === "menu-week-prev" || action === "menu-week-next") {
+    const date = new Date(`${menuFocusDate}T12:00:00`);
+    date.setDate(date.getDate() + (action === "menu-week-prev" ? -7 : 7));
+    menuFocusDate = isoDate(date);
+    menuMonth = menuFocusDate.slice(0, 7);
+    render();
+  }
   else if (action === "select-school") { data.selectedSchoolId = id; saveData(); render(); }
   else if (action === "export-stock") exportStock();
   else if (action === "export-purchases") exportPurchases();
@@ -606,6 +913,17 @@ document.getElementById("page-content").addEventListener("input", (event) => {
   }
 });
 document.getElementById("page-content").addEventListener("change", (event) => {
+  if (event.target.id === "menu-month") {
+    menuMonth = event.target.value;
+    menuFocusDate = `${menuMonth}-01`;
+    render();
+  }
+  if (event.target.id === "menu-focus-date") {
+    menuFocusDate = event.target.value;
+    menuMonth = menuFocusDate.slice(0, 7);
+    render();
+  }
+  if (event.target.id === "menu-consumption-period") render();
   if (event.target.id === "category-filter") {
     categoryFilter = event.target.value;
     render();

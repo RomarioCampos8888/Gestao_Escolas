@@ -63,3 +63,9 @@ O Google Identity Services configurado acima é o fluxo web. Para oferecer login
 - **Situação do painel:** crítico abaixo de 7 dias, atenção de 7 a 30 dias e estável acima de 30 dias. O gráfico compara as saídas registradas nos últimos 30 dias com a previsão mensal de cada alimento.
 
 O slogan do produto é: “Merenda Fácil — Saiba em segundos quantos dias de alimentação sua escola ainda possui.”
+
+## Cardápio Escolar
+
+O módulo **Cardápio Escolar** permite cadastrar preparações com ingredientes vinculados aos alimentos da escola selecionada, planejar refeições por data e turno e consultar o consumo previsto, a cobertura do estoque e a lista de compras sugerida. As estimativas usam o número de alunos da escola e a proporção entre as porções da receita e os alunos atendidos. Unidades de massa (Kg/g) e volume (Litro/mL) são convertidas nas projeções.
+
+Preparações e planejamento são salvos no mesmo armazenamento local do navegador usado pelo restante da aplicação. O cálculo do cardápio é uma previsão: não altera o estoque nem cria movimentações. Para atualizar o saldo, continue registrando as saídas na área de movimentações.
