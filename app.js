@@ -74,7 +74,114 @@ function demoData() {
     { id: "m-5", date: daysAgo(4), productId: "p-pasta", type: "saida", quantity: 22, reason: "Preparo das refeições", note: "" },
     { id: "m-6", date: daysAgo(72), productId: "p-oil", type: "entrada", quantity: 40, unitPrice: 7.3, supplier: "Atacado Central", reason: "Reposição", note: "" },
   ];
-  return { schools, categories, products, movements, preparations: [], menuPlans: [], lastDailyDeduction: isoDate(new Date()), selectedSchoolId: schools[0].id };
+  return { schools, categories, products, movements, preparations: [], menuPlans: [], selectedSchoolId: schools[0].id };
+}
+
+function generatedId(prefix) {
+  const randomUUID = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${randomUUID}`;
+}
+
+function normalizeSavedData(saved) {
+  const fallback = demoData();
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return fallback;
+
+  const text = (value, fallbackValue = "") => typeof value === "string" ? value : fallbackValue;
+  const numberValue = (value, fallbackValue = 0) => {
+    const normalized = Number(value);
+    return Number.isFinite(normalized) ? normalized : fallbackValue;
+  };
+  const nonNegative = (value, fallbackValue = 0) => Math.max(0, numberValue(value, fallbackValue));
+
+  const schools = Array.isArray(saved.schools)
+    ? saved.schools.filter((item) => item && typeof item === "object").map((item) => ({
+        id: text(item.id, generatedId("school")),
+        name: text(item.name, "Escola sem nome"),
+        city: text(item.city, ""),
+        state: text(item.state, "").slice(0, 2).toUpperCase(),
+        students: Math.max(1, numberValue(item.students, 1)),
+        schoolDays: Math.min(31, Math.max(1, numberValue(item.schoolDays, 22))),
+        manager: text(item.manager, ""),
+      }))
+    : [];
+  if (!schools.length) return fallback;
+
+  const categories = Array.isArray(saved.categories)
+    ? saved.categories.filter((item) => item && typeof item === "object").map((item) => ({
+        id: text(item.id, generatedId("cat")),
+        name: text(item.name, "Sem nome"),
+        description: text(item.description, ""),
+      }))
+    : fallback.categories;
+  if (!categories.length) categories.push(...fallback.categories);
+
+  const products = Array.isArray(saved.products)
+    ? saved.products.filter((item) => item && typeof item === "object").map((item) => ({
+        id: text(item.id, generatedId("product")),
+        name: text(item.name, "Alimento sem nome"),
+        categoryId: categories.some((category) => category.id === item.categoryId) ? item.categoryId : categories[0].id,
+        unit: text(item.unit, "Kg"),
+        minimum: nonNegative(item.minimum),
+        consumptionPerStudent: nonNegative(item.consumptionPerStudent),
+        expiration: text(item.expiration, ""),
+        supplier: text(item.supplier, ""),
+        schoolId: schools.some((school) => school.id === item.schoolId) ? item.schoolId : schools[0].id,
+        stock: nonNegative(item.stock),
+        price: nonNegative(item.price),
+        createdAt: text(item.createdAt, ""),
+      }))
+    : [];
+
+  const movements = Array.isArray(saved.movements)
+    ? saved.movements.filter((item) => item && typeof item === "object").map((item) => ({
+        id: text(item.id, generatedId("movement")),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(text(item.date)) ? item.date : isoDate(new Date()),
+        productId: text(item.productId, ""),
+        type: item.type === "entrada" ? "entrada" : item.type === "saida" ? "saida" : "saida",
+        quantity: nonNegative(item.quantity),
+        unitPrice: nonNegative(item.unitPrice),
+        supplier: text(item.supplier, ""),
+        reason: text(item.reason, ""),
+        note: text(item.note, ""),
+      })).filter((item) => item.productId && item.quantity > 0)
+    : [];
+
+  const preparations = Array.isArray(saved.preparations)
+    ? saved.preparations.filter((item) => item && typeof item === "object").map((item) => ({
+        id: text(item.id, generatedId("preparation")),
+        schoolId: text(item.schoolId, schools[0].id),
+        name: text(item.name, "Preparação sem nome"),
+        description: text(item.description, ""),
+        method: text(item.method, ""),
+        servings: Math.max(1, numberValue(item.servings, 1)),
+        active: item.active !== false,
+        ingredients: Array.isArray(item.ingredients)
+          ? item.ingredients.filter((ingredient) => ingredient && typeof ingredient === "object").map((ingredient) => ({
+              productId: text(ingredient.productId, ""),
+              quantity: nonNegative(ingredient.quantity),
+              unit: text(ingredient.unit, ""),
+            })).filter((ingredient) => ingredient.productId && ingredient.quantity > 0)
+          : [],
+      }))
+    : [];
+
+  const menuPlans = Array.isArray(saved.menuPlans)
+    ? saved.menuPlans.filter((item) => item && typeof item === "object").map((item) => ({
+        id: text(item.id, generatedId("menu")),
+        schoolId: text(item.schoolId, schools[0].id),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(text(item.date)) ? item.date : isoDate(new Date()),
+        shift: text(item.shift, "Manhã"),
+        preparationId: text(item.preparationId, ""),
+      })).filter((item) => item.preparationId)
+    : [];
+
+  const selectedSchoolId = schools.some((school) => school.id === saved.selectedSchoolId)
+    ? saved.selectedSchoolId
+    : schools[0].id;
+
+  return { schools, categories, products, movements, preparations, menuPlans, selectedSchoolId };
 }
 
 function loadData() {
@@ -82,10 +189,9 @@ function loadData() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return demoData();
     const parsed = JSON.parse(saved);
-    if (!parsed.schools?.length || !Array.isArray(parsed.products) || !Array.isArray(parsed.movements)) return demoData();
-    parsed.preparations = Array.isArray(parsed.preparations) ? parsed.preparations : [];
-    parsed.menuPlans = Array.isArray(parsed.menuPlans) ? parsed.menuPlans : [];
-    return parsed;
+    const normalized = normalizeSavedData(parsed);
+    if (JSON.stringify(normalized) !== JSON.stringify(parsed)) saveData(normalized);
+    return normalized;
   } catch (error) {
     console.error("Não foi possível carregar os dados salvos do Merenda Fácil.", error);
     return demoData();
@@ -98,15 +204,14 @@ let searchTerm = "";
 let categoryFilter = "todas";
 let reportFilter = "30";
 let movementFilters = { type: "todos", productId: "todos", from: "", to: "" };
-let googleUser = null;
 let menuSection = "planning";
 let menuMonth = isoDate(new Date()).slice(0, 7);
 let menuView = "month";
 let menuFocusDate = isoDate(new Date());
 
-function saveData() {
+function saveData(dataToSave = data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
   } catch (error) {
     showToast("Não foi possível salvar. Verifique o espaço disponível no navegador.", true);
     console.error("Erro ao salvar dados do Merenda Fácil.", error);
@@ -196,30 +301,6 @@ function consumptionLast30Days(products = productsForSchool()) {
     };
   }).sort((a, b) => b.progress - a.progress || b.consumed - a.consumed).slice(0, 5);
 }
-function updateDailyConsumption() {
-  const today = isoDate(new Date());
-  const previous = data.lastDailyDeduction;
-  if (!previous) {
-    data.lastDailyDeduction = today;
-    saveData();
-    return;
-  }
-  const elapsed = Math.floor((new Date(`${today}T00:00:00`) - new Date(`${previous}T00:00:00`)) / 86400000);
-  if (elapsed < 1) return;
-  const daysToApply = Math.min(elapsed, 90);
-  const entries = [];
-  data.schools.forEach((school) => {
-    data.products.filter((product) => product.schoolId === school.id).forEach((product) => {
-      const quantity = Math.min(Number(product.stock || 0), dailyConsumption(product, school) * daysToApply);
-      if (quantity <= 0) return;
-      product.stock = Number(product.stock) - quantity;
-      entries.push({ id: crypto.randomUUID(), date: today, productId: product.id, type: "saida", quantity, reason: "Consumo automático diário", note: daysToApply > 1 ? `Consumo acumulado de ${daysToApply} dias` : "Baixa automática diária" });
-    });
-  });
-  data.movements.push(...entries);
-  data.lastDailyDeduction = today;
-  saveData();
-}
 
 function setSchoolOptions() {
   const select = document.getElementById("school-select");
@@ -227,65 +308,13 @@ function setSchoolOptions() {
   select.value = currentSchool()?.id || "";
   document.getElementById("school-student-count").textContent = `${number(currentSchool()?.students || 0, 0)} alunos`;
 }
-function responsibleName() { return googleUser?.name || currentSchool()?.manager || "Gestor escolar"; }
+function responsibleName() { return currentSchool()?.manager || "Gestor escolar"; }
 function setUserName() {
   const manager = responsibleName();
   const initials = manager.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   document.getElementById("user-name").textContent = manager;
-  document.getElementById("user-email").textContent = googleUser?.email || "Responsável escolar";
+  document.getElementById("user-email").textContent = "Responsável escolar";
   document.getElementById("top-avatar").textContent = initials;
-}
-function googleClientId() {
-  const configured = document.querySelector('meta[name="google-signin-client_id"]')?.content.trim();
-  return configured && !configured.startsWith("COLE_SEU_CLIENT_ID") ? configured : "";
-}
-function renderGoogleAuth() {
-  const container = document.getElementById("google-auth");
-  if (googleUser) {
-    container.innerHTML = '<button class="google-signout" data-action="google-signout">Sair da conta Google</button>';
-    return;
-  }
-  if (!googleClientId() || !window.google?.accounts?.id) {
-    container.innerHTML = '<button class="google-connect-button" data-action="google-connect">Conectar Google</button>';
-    return;
-  }
-  container.innerHTML = '<div id="google-signin-button"></div>';
-  window.google.accounts.id.renderButton(document.getElementById("google-signin-button"), {
-    type: "standard",
-    theme: "outline",
-    size: "medium",
-    shape: "pill",
-    text: "signin_with",
-    locale: "pt-BR",
-  });
-}
-function handleGoogleCredential(response) {
-  try {
-    const encodedPayload = response.credential.split(".")[1];
-    if (!encodedPayload) throw new Error("A resposta do Google não contém os dados da conta.");
-    const bytes = Uint8Array.from(atob(encodedPayload.replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
-    const profile = JSON.parse(new TextDecoder().decode(bytes));
-    if (typeof profile.name !== "string" || !profile.name.trim()) throw new Error("O Google não retornou o nome da conta.");
-    googleUser = { name: profile.name.trim(), email: typeof profile.email === "string" ? profile.email : "" };
-    render();
-    showToast(`Conta Google conectada. Olá, ${googleUser.name}!`);
-  } catch (error) {
-    console.error("Não foi possível ler o nome da conta Google.", error);
-    showToast("Não foi possível obter o nome da conta Google. Tente conectar novamente.", true);
-  }
-}
-function initializeGoogleIdentity() {
-  const clientId = googleClientId();
-  if (!clientId || !window.google?.accounts?.id) {
-    renderGoogleAuth();
-    return;
-  }
-  window.google.accounts.id.initialize({
-    client_id: clientId,
-    callback: handleGoogleCredential,
-    auto_select: false,
-  });
-  renderGoogleAuth();
 }
 function render() {
   setSchoolOptions();
@@ -298,7 +327,6 @@ function render() {
   const renderer = { dashboard: renderDashboard, inventory: renderInventory, movements: renderMovements, purchases: renderPurchases, menu: renderMenu, reports: renderReports, registers: renderRegisters }[activePage];
   document.getElementById("page-content").innerHTML = renderer();
   document.getElementById("notification-dot").style.display = alertItems().length ? "block" : "none";
-  renderGoogleAuth();
 }
 
 function pageHeading(eyebrow, title, description, actions = "") {
@@ -786,6 +814,16 @@ function newMovement(type, productId = "") {
     saveData(); closeModal(); render(); showToast(`${type === "entrada" ? "Entrada" : "Saída"} registrada e estoque atualizado.`);
   });
 }
+function chooseMovementType(productId = "") {
+  const options = [
+    { value: "entrada", label: "Entrada" },
+    { value: "saida", label: "Saída" },
+  ];
+  openModal("Nova movimentação", "Escolha o tipo de movimentação que deseja registrar.", `<div class="form-grid">${field("Tipo", "type", "entrada", "select", options, true)}</div>`, (values) => {
+    closeModal();
+    newMovement(values.type, productId);
+  }, "Continuar");
+}
 function newSchool(school = null) {
   const body = `<div class="form-grid">${field("Nome da escola", "name", school?.name || "", "text", null, true)}${field("Cidade", "city", school?.city || "", "text", null, true)}${field("Estado (UF)", "state", school?.state || "", "text", null, true, 'maxlength="2"')}${field("Quantidade de alunos", "students", school?.students ?? "", "number", null, true, 'min="1" step="1"')}${field("Dias letivos por mês", "schoolDays", school?.schoolDays ?? 22, "number", null, true, 'min="1" max="31" step="1"')}${field("Responsável", "manager", school?.manager || "", "text", null, true)}</div>`;
   openModal(school ? "Editar escola" : "Adicionar escola", "Os dados são usados para calcular o consumo e os dias restantes.", body, (values) => {
@@ -856,7 +894,7 @@ document.addEventListener("click", (event) => {
   const { action, id, product } = target.dataset;
   if (action === "new-product") newProduct();
   else if (action === "edit-product") newProduct(productById(id));
-  else if (action === "new-movement") newMovement("saida", product || "");
+  else if (action === "new-movement") chooseMovementType(product || "");
   else if (action === "new-entry") newMovement("entrada");
   else if (action === "new-exit") newMovement("saida");
   else if (action === "new-school") newSchool();
@@ -882,13 +920,6 @@ document.addEventListener("click", (event) => {
   else if (action === "export-stock") exportStock();
   else if (action === "export-purchases") exportPurchases();
   else if (action === "export-movements") exportMovements();
-  else if (action === "google-connect") showToast("Configure o Client ID OAuth do Google no meta google-signin-client_id do index.html.", true);
-  else if (action === "google-signout") {
-    googleUser = null;
-    window.google?.accounts?.id?.disableAutoSelect();
-    render();
-    showToast("Conta Google desconectada.");
-  }
   else if (action === "delete-movement") {
     const movement = data.movements.find((item) => item.id === id);
     if (!movement || !window.confirm("Excluir esta movimentação e reverter seu efeito no estoque?")) return;
@@ -939,6 +970,4 @@ document.querySelectorAll("[data-icon]").forEach((node) => {
   const name = node.dataset.icon;
   if (name) node.innerHTML = icon(name);
 });
-updateDailyConsumption();
 render();
-initializeGoogleIdentity();

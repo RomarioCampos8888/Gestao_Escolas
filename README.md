@@ -8,7 +8,7 @@ Abra `index.html` em um navegador moderno. Não é necessário instalar dependê
 
 Os cadastros e as movimentações ficam salvos no armazenamento local do navegador e continuam disponíveis ao fechar e reabrir o app no mesmo dispositivo e perfil do navegador. Entradas e saídas atualizam o estoque na hora. Ao abrir o sistema em uma nova data, o consumo diário estimado é baixado automaticamente para cada alimento, usando o número de alunos e o consumo médio por aluno.
 
-Esse armazenamento é local: os dados não são sincronizados entre dispositivos nem isolados por conta de usuário. Para sincronização entre usuários/dispositivos e controle de acesso, é necessário adicionar autenticação real e um backend; conectar a conta Google nesta versão altera apenas o nome exibido.
+Esse armazenamento é local: os dados não são sincronizados entre dispositivos nem isolados por conta de usuário. Para sincronização entre usuários/dispositivos e controle de acesso, é necessário adicionar autenticação real e um backend.
 
 ## App Android e iOS com Capacitor
 
@@ -55,18 +55,6 @@ O projeto está preparado para os [native builds do Appflow para Capacitor](http
 3. Gere um build Android de depuração para validação. Para distribuir Android Release ou criar builds iOS, configure os certificados de assinatura correspondentes no Appflow.
 
 Não é necessário um arquivo `appflow.yaml` para este fluxo de native builds: o Appflow detecta o runtime Capacitor e usa os scripts do `package.json`. O Appflow gera os binários na nuvem; a validação de compilação local de iOS requer um Mac com Xcode.
-
-## Nome da conta Google
-
-Para mostrar no cabeçalho o nome da conta Google conectada:
-
-1. Crie um OAuth Client ID do tipo **Aplicativo da Web** no Google Cloud Console e configure as origens JavaScript autorizadas para o endereço em que a aplicação será aberta (por exemplo, `http://localhost:8000`).
-2. No `index.html`, substitua o valor de `google-signin-client_id` pelo Client ID público terminado em `.apps.googleusercontent.com`.
-3. Abra ou atualize a aplicação e use **Conectar Google**.
-
-O nome e o e-mail do perfil conectado são usados apenas para exibição nesta sessão do navegador. A aplicação não guarda o token de identidade e não tem um backend que valide login ou proteja os dados; o seletor Google, sozinho, não deve ser usado como mecanismo de controle de acesso.
-
-O Google Identity Services configurado acima é o fluxo web. Para oferecer login Google dentro do app Capacitor nativo, é necessário configurar credenciais OAuth para Android e iOS e integrar um fluxo de autenticação nativa; esse passo depende das credenciais e configurações da conta Google do projeto.
 
 ## Cálculos
 
