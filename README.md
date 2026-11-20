@@ -32,6 +32,19 @@ npx cap open ios
 
 O comando `build` copia os arquivos web necessários para `www/`. A saída é gerada localmente e não precisa ser versionada. `cap sync` copia essa saída para os projetos nativos e os atualiza; execute-o após alterações no app antes de compilar localmente.
 
+### Gerar APK Android de testes
+
+Instale o Android Studio com o Android SDK Platform 36 e Build-Tools, e use o JDK 21 para executar o Gradle deste projeto. Com o SDK configurado no Android Studio (ou `ANDROID_HOME` apontando para ele), execute na raiz do repositório:
+
+```bash
+npm install
+npm run cap:sync:android
+cd android
+./gradlew assembleDebug
+```
+
+O APK de depuração será gerado em `android/app/build/outputs/apk/debug/app-debug.apk`. Ele pode ser instalado em um dispositivo de testes com `adb install -r app/build/outputs/apk/debug/app-debug.apk`, executando esse comando a partir da pasta `android/`. Builds `debug` são destinados a testes e não substituem um APK/AAB `release` assinado para distribuição.
+
 ## Ionic Appflow
 
 O projeto está preparado para os [native builds do Appflow para Capacitor](https://ionic.io/docs/appflow/package/builds). Para conectar e compilar:
