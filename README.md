@@ -13,6 +13,7 @@ Esse armazenamento é local: os dados não são sincronizados entre dispositivos
 ## App Android e iOS com Capacitor
 
 O projeto está configurado com Capacitor 8 e contém os projetos nativos `android/` e `ios/`. O identificador nativo inicial é `br.com.merendafacil.app`; escolha e confirme o identificador definitivo antes de publicar nas lojas, pois alterá-lo depois cria outro aplicativo.
+Os ícones e telas de abertura nativos atuais são provisórios e usam a marca do Merenda Fácil; substitua-os pelos arquivos finais antes de publicar.
 
 Pré-requisitos para desenvolvimento local:
 
