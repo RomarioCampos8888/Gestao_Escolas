@@ -169,6 +169,8 @@ h1 { color: #202b25; font: 800 24px/1.2 Manrope, sans-serif; letter-spacing: -.7
 .register-item small { color: #9ba49c; display: block; font-size: 9px; margin-top: 3px; }
 .register-item button { border: 0; background: transparent; color: var(--green); font-size: 9px; font-weight: 700; }
 .register-intro { padding: 17px 20px; background: #eef6ef; border-radius: 11px; margin-bottom: 15px; color: #47634d; }
+.backup-item { gap: 12px; }
+.backup-upload-button { cursor: pointer; text-decoration: none; }
 .register-intro strong { font: 700 13px Manrope, sans-serif; }
 .register-intro p { margin: 5px 0 0; font-size: 10px; color: #748879; }
 .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

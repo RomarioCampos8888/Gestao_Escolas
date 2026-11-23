@@ -10,6 +10,24 @@ Os cadastros e as movimentações ficam salvos no armazenamento local do navegad
 
 Esse armazenamento é local: os dados não são sincronizados entre dispositivos nem isolados por conta de usuário. Para sincronização entre usuários/dispositivos e controle de acesso, é necessário adicionar autenticação real e um backend.
 
+## Backup e restauração
+
+Na tela **Cadastros**, a opção **Backup e restauração** permite baixar todos os dados em um arquivo `merenda-facil-backup-AAAA-MM-DD.json` e importar um backup anterior em formato JSON.
+
+A importação exige uma confirmação explícita, valida a estrutura mínima e usa `normalizeSavedData()` antes de substituir o conteúdo atual da chave `merenda-facil-data-v1`. Arquivos inválidos ou JSON corrompido não substituem os dados existentes.
+
+## PWA e uso offline
+
+O Merenda Fácil pode ser instalado como aplicativo em navegadores compatíveis. A instalação usa `manifest.json`, dois ícones PWA e `service-worker.js`.
+
+Para servir o PWA corretamente, use HTTP em uma rede local ou HTTPS:
+
+```bash
+python3 -m http.server 8000 --bind 0.0.0.0
+```
+
+O Service Worker aplica Cache First aos arquivos principais e mantém o aplicativo disponível offline depois da primeira instalação dos recursos. Ao publicar uma nova versão, altere `CACHE_NAME` no Service Worker para uma versão diferente para que o cache antigo seja removido.
+
 ## App Android e iOS com Capacitor
 
 O projeto está configurado com Capacitor 8 e contém os projetos nativos `android/` e `ios/`. O identificador nativo inicial é `br.com.merendafacil.app`; escolha e confirme o identificador definitivo antes de publicar nas lojas, pois alterá-lo depois cria outro aplicativo.

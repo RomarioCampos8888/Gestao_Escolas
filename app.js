@@ -497,6 +497,7 @@ function renderRegisters() {
       <section class="panel register-card"><div class="panel-header"><div><h2>Escolas cadastradas</h2><p>${data.schools.length} unidades na sua gestão</p></div><button class="text-link" data-action="new-school">+ Adicionar</button></div><div class="register-list">${data.schools.map((item) => `<div class="register-item"><div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.city)} · ${item.students} alunos</small></div><button data-action="select-school" data-id="${item.id}">Selecionar</button></div>`).join("")}</div></section>
       <section class="panel register-card"><div class="panel-header"><div><h2>Categorias de alimentos</h2><p>Organize os alimentos por tipo</p></div><button class="text-link" data-action="new-category">+ Categoria</button></div><div class="register-list">${data.categories.map((cat) => `<div class="register-item"><div><strong>${escapeHTML(cat.name)}</strong><small>${escapeHTML(cat.description || "Sem descrição")}</small></div><span class="summary-label">${data.products.filter((p) => p.categoryId === cat.id).length} alimentos</span></div>`).join("")}</div></section>
       <section class="panel register-card"><div class="panel-header"><div><h2>Unidades de medida</h2><p>Disponíveis nos cadastros de alimentos</p></div></div><div class="register-list">${["Kg", "Litro", "Unidade", "Pacote"].map((unit) => `<div class="register-item"><div><strong>${unit}</strong></div><span class="summary-label">${data.products.filter((p) => p.unit === unit).length} alimentos</span></div>`).join("")}</div></section>
+      <section class="panel register-card"><div class="panel-header"><div><h2>Backup e restauração</h2><p>Guarde uma cópia ou restaure dados neste dispositivo</p></div></div><div class="register-list"><div class="register-item backup-item"><div><strong>Exportar dados</strong><small>Baixa todos os dados em um arquivo JSON</small></div><button class="secondary-button" type="button" data-action="export-backup">Baixar backup</button></div><div class="register-item backup-item"><div><strong>Importar dados</strong><small>Restaurar um arquivo de backup JSON</small></div><label class="secondary-button backup-upload-button">Selecionar arquivo<input id="backup-file" type="file" accept=".json,application/json" hidden></label></div></div></section>
     </div>`;
 }
 
@@ -866,6 +867,65 @@ function exportMovements() {
   const ids = new Set(productsForSchool().map((p) => p.id));
   downloadCSV("movimentacoes-merenda-facil.csv", [["Data", "Alimento", "Categoria", "Tipo", "Quantidade", "Motivo", "Fornecedor", "Observação"], ...data.movements.filter((m) => ids.has(m.productId)).map((m) => [dateLabel(m.date), productById(m.productId)?.name, categoryName(productById(m.productId)?.categoryId), m.type, number(m.quantity), m.reason, m.supplier, m.note])]);
 }
+function exportBackup() {
+  const backup = localStorage.getItem(STORAGE_KEY);
+  let content = data;
+  if (backup) {
+    try {
+      content = JSON.parse(backup);
+    } catch (error) {
+      content = data;
+    }
+  }
+  const blob = new Blob([JSON.stringify(content, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `merenda-facil-backup-${isoDate(new Date())}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast("Backup JSON exportado com sucesso.");
+}
+function importBackup(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".json") && file.type !== "application/json") {
+    showToast("Selecione um arquivo JSON válido.", true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    let imported;
+    try {
+      imported = JSON.parse(String(reader.result));
+    } catch (error) {
+      showToast("Arquivo inválido ou JSON corrompido.", true);
+      return;
+    }
+    if (!imported || typeof imported !== "object" || Array.isArray(imported)
+      || !Array.isArray(imported.schools)
+      || !Array.isArray(imported.categories)
+      || !Array.isArray(imported.products)
+      || !Array.isArray(imported.movements)) {
+      showToast("Estrutura incompatível. O backup deve conter escolas, categorias, alimentos e movimentações.", true);
+      return;
+    }
+    if (!window.confirm("ATENÇÃO: A importação substituirá todos os dados atuais. Deseja continuar?")) return;
+    const normalized = normalizeSavedData(imported);
+    if (!normalized.schools.length) {
+      showToast("O backup não contém uma escola válida.", true);
+      return;
+    }
+    data = normalized;
+    saveData(data);
+    setSchoolOptions();
+    activePage = "registers";
+    render();
+    showToast("Backup importado e dados atualizados.");
+  };
+  reader.onerror = () => showToast("Não foi possível ler o arquivo de backup.", true);
+  reader.onabort = () => showToast("A leitura do arquivo foi interrompida.", true);
+  reader.readAsText(file);
+}
 
 document.addEventListener("click", (event) => {
   const menuSectionButton = event.target.closest("[data-menu-section]");
@@ -920,6 +980,7 @@ document.addEventListener("click", (event) => {
   else if (action === "export-stock") exportStock();
   else if (action === "export-purchases") exportPurchases();
   else if (action === "export-movements") exportMovements();
+  else if (action === "export-backup") exportBackup();
   else if (action === "delete-movement") {
     const movement = data.movements.find((item) => item.id === id);
     if (!movement || !window.confirm("Excluir esta movimentação e reverter seu efeito no estoque?")) return;
@@ -944,6 +1005,10 @@ document.getElementById("page-content").addEventListener("input", (event) => {
   }
 });
 document.getElementById("page-content").addEventListener("change", (event) => {
+  if (event.target.id === "backup-file") {
+    importBackup(event.target.files?.[0]);
+    event.target.value = "";
+  }
   if (event.target.id === "menu-month") {
     menuMonth = event.target.value;
     menuFocusDate = `${menuMonth}-01`;
