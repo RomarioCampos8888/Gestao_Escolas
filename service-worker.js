@@ -1,4 +1,4 @@
-const CACHE_NAME = "merenda-facil-v2";
+const CACHE_NAME = "merenda-facil-v3";
 const CACHE_FILES = [
   "./",
   "./index.html",

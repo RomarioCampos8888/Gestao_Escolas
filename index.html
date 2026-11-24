@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#2e7d32" />
+    <meta name="theme-color" content="#062e1f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="description" content="Merenda Fácil — saiba em segundos quantos dias de alimentação sua escola ainda possui." />
@@ -53,25 +53,28 @@
       <div class="nav-inner">
         <button class="nav-link active" data-page="dashboard"><span class="nav-icon" data-icon="grid"></span> Painel</button>
         <button class="nav-link" data-page="inventory"><span class="nav-icon" data-icon="box"></span> Alimentos</button>
-        <button class="nav-link" data-page="movements"><span class="nav-icon" data-icon="arrows"></span> Movimentações</button>
-        <button class="nav-link" data-page="purchases"><span class="nav-icon" data-icon="cart"></span> O Que Comprar? <span class="nav-count" id="purchase-count">0</span></button>
-        <button class="nav-link" data-page="menu"><span class="nav-icon" data-icon="calendar"></span> Cardápio Escolar</button>
+        <button class="nav-link" data-page="movements"><span class="nav-icon" data-icon="arrows"></span> Entradas e saídas</button>
+        <button class="nav-link" data-page="purchases"><span class="nav-icon" data-icon="cart"></span> Compras <span class="nav-count" id="purchase-count">0</span></button>
+        <button class="nav-link" data-page="menu"><span class="nav-icon" data-icon="calendar"></span> Cardápio</button>
         <button class="nav-link" data-page="reports"><span class="nav-icon" data-icon="chart"></span> Relatórios</button>
-        <button class="nav-link" data-page="registers"><span class="nav-icon" data-icon="settings"></span> Cadastros</button>
+        <button class="nav-link" data-page="registers"><span class="nav-icon" data-icon="settings"></span> Dados da escola</button>
       </div>
     </nav>
     <main class="main-area">
       <section class="page-content" id="page-content" aria-live="polite"></section>
     </main>
     <nav class="mobile-tab-bar" aria-label="Navegação mobile">
-      <button class="mobile-tab active" data-page="dashboard"><span data-icon="grid"></span><small>Painel</small></button>
+      <button class="mobile-tab active" data-page="dashboard"><span data-icon="grid"></span><small>Início</small></button>
       <button class="mobile-tab" data-page="inventory"><span data-icon="box"></span><small>Alimentos</small></button>
-      <button class="mobile-tab" data-page="movements"><span data-icon="arrows"></span><small>Movimentações</small></button>
+      <button class="mobile-tab" data-page="movements"><span data-icon="arrows"></span><small>Registros</small></button>
       <button class="mobile-tab" data-page="purchases"><span data-icon="cart"></span><small>Compras</small></button>
-      <button class="mobile-tab" data-page="menu"><span data-icon="calendar"></span><small>Cardápio</small></button>
-      <button class="mobile-tab" data-page="reports"><span data-icon="chart"></span><small>Relatórios</small></button>
-      <button class="mobile-tab" data-page="registers"><span data-icon="settings"></span><small>Cadastros</small></button>
+      <button class="mobile-tab mobile-more-trigger" id="mobile-more-trigger" data-action="toggle-mobile-more" aria-controls="mobile-more-menu" aria-expanded="false"><span data-icon="more"></span><small>Mais</small></button>
     </nav>
+    <div class="mobile-more-menu" id="mobile-more-menu" aria-label="Mais áreas">
+      <button class="mobile-more-link" data-page="menu"><span data-icon="calendar"></span>Cardápio</button>
+      <button class="mobile-more-link" data-page="reports"><span data-icon="chart"></span>Relatórios</button>
+      <button class="mobile-more-link" data-page="registers"><span data-icon="settings"></span>Dados da escola</button>
+    </div>
     <div id="modal-root"></div>
     <div id="toast-root" class="toast-root" aria-live="polite"></div>
     <script>

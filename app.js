@@ -12,6 +12,7 @@ const iconPaths = {
   chevron: '<path d="m6 9 6 6 6-6"/>',
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
@@ -319,7 +320,8 @@ function setUserName() {
 function render() {
   setSchoolOptions();
   setUserName();
-  document.querySelectorAll(".nav-link, .mobile-tab").forEach((button) => button.classList.toggle("active", button.dataset.page === activePage));
+  document.querySelectorAll(".nav-link, .mobile-tab[data-page], .mobile-more-link").forEach((button) => button.classList.toggle("active", button.dataset.page === activePage));
+  document.getElementById("mobile-more-trigger")?.classList.toggle("active", ["menu", "reports", "registers"].includes(activePage));
   const purchases = forecastItems().filter((item) => item.purchase > 0).length;
   document.getElementById("purchase-count").textContent = purchases;
   const today = new Date();
@@ -359,13 +361,13 @@ function renderDashboard() {
   const menuNeeds = menuConsumption(menuMonth).filter((item) => item.purchase > 0);
   const menuCoveredCount = menuConsumption(menuMonth).filter((item) => item.status === "good").length;
   const tightest = [...products].filter((p) => dailyConsumption(p) > 0).sort((a, b) => daysRemaining(a) - daysRemaining(b))[0];
-  const heroStatus = isDaysBelow(days, 7) ? { label: "CRÍTICO", message: "Reposição necessária nesta semana", icon: "warning" } : isDaysAtMost(days, 30) ? { label: "ATENÇÃO", message: "Planeje a reposição dos alimentos", icon: "clock" } : { label: "ESTÁVEL", message: `Estoque suficiente para ${number(days, 0)} dias`, icon: "calendarCheck" };
+  const heroStatus = isDaysBelow(days, 7) ? { label: "URGENTE", message: "Comprar urgentemente", icon: "warning" } : isDaysAtMost(days, 30) ? { label: "ATENÇÃO", message: "Atenção: reposição próxima", icon: "clock" } : { label: "SEGURO", message: "Estoque seguro", icon: "calendarCheck" };
   const expiringProducts = products.filter((product) => product.expiration && product.expiration >= isoDate(new Date()) && (new Date(`${product.expiration}T00:00:00`) - new Date(`${isoDate(new Date())}T00:00:00`)) / 86400000 <= 30);
   return `${pageHeading("PAINEL DA MERENDA", escapeHTML(school.name), `${escapeHTML(school.city)}, ${escapeHTML(school.state)} · ${number(school.students, 0)} alunos · ${school.schoolDays} dias letivos/mês · Responsável: ${escapeHTML(responsibleName())}`, "")}
     <div class="dashboard-grid">
       <section class="days-card ${daysStatus}">
         <div class="days-card-content">
-          <div class="eyebrow"><span class="status-dot"></span> DIAS DE MERENDA DISPONÍVEIS</div>
+          <div class="eyebrow"><span class="status-dot"></span> DIAS DE ALIMENTAÇÃO</div>
           <div class="days-main"><div class="days-number">${number(days, 0)}<span>DIAS</span></div>
             <div class="days-situation"><span class="situation-indicator">${icon(heroStatus.icon)}</span><div><span class="situation-label">SITUAÇÃO · ${heroStatus.label}</span><strong>${heroStatus.message}</strong></div></div>
           </div>
@@ -383,17 +385,17 @@ function renderDashboard() {
         <button class="primary-button summary-purchase-button" data-page="purchases">${icon("cart")} Comprar para o próximo mês</button>
       </section>
     </div>
+    <section class="quick-actions" aria-label="Ações rápidas"><h2>O que você precisa fazer?</h2><div class="quick-action-grid">
+      <button class="quick-action" data-action="new-entry">${icon("plus")}<span>Registrar entrada</span></button>
+      <button class="quick-action" data-action="new-exit">${icon("arrows")}<span>Registrar saída</span></button>
+      <button class="quick-action" data-action="new-product">${icon("package")}<span>Adicionar alimento</span></button>
+      <button class="quick-action" data-action="new-menu-plan">${icon("calendar")}<span>Planejar refeição</span></button>
+    </div></section>
     <div class="stats-grid">
-      ${statCard("Alimentos cadastrados", products.length, "itens na escola", "package")}
-      ${statCard("Abaixo do mínimo", lowStock, lowStock ? "precisam de reposição" : "estoque adequado", "warning", lowStock ? "red" : "")}
+      ${statCard("Produtos críticos", criticalProducts.length, criticalProducts.length ? "precisam de ação" : "nenhum item urgente", "warning", criticalProducts.length ? "red" : "")}
+      ${statCard("Produtos em atenção", warningProducts.length, "acompanhe de perto", "clock", warningProducts.length ? "amber" : "")}
+      ${statCard("Para comprar", purchaseCount, "para o próximo mês", "cart", purchaseCount ? "amber" : "")}
       ${statCard("Vencendo em breve", expiring, "nos próximos 30 dias", "calendar", expiring ? "amber" : "")}
-      ${statCard("Movimentações hoje", todayMovements, "entradas e saídas", "arrows", "blue")}
-      ${statCard("Refeições previstas", `${number(monthlyMeals, 0)} <small>refeições</small>`, `${school.students} alunos × ${school.schoolDays} dias letivos`, "chart")}
-      ${statCard("Previsão de compras", purchaseCount, "itens para o próximo mês", "cart", purchaseCount ? "amber" : "")}
-      ${statCard("Refeições planejadas", monthMenu.length, "no calendário deste mês", "calendar")}
-      ${statCard("Preparações cadastradas", preparationsForSchool().length, "receitas ativas", "leaf")}
-      ${statCard("Cardápio coberto", menuCoveredCount, "ingredientes suficientes", "calendarCheck", menuNeeds.length ? "amber" : "")}
-      ${statCard("Itens para comprar", menuNeeds.length, "para cumprir o cardápio", "cart", menuNeeds.length ? "red" : "")}
     </div>
     <section class="panel menu-dashboard-link"><div class="panel-header"><div><h2>Cardápio Escolar</h2><p>Planeje refeições e confira o impacto no estoque.</p></div><button class="primary-button" data-page="menu">${icon("calendar")} Abrir planejamento</button></div></section>
     <section class="panel attention-panel"><div class="panel-header"><div><h2>Produtos que exigem atenção</h2><p>Priorize o que pode faltar ou vencer primeiro</p></div><button class="text-link" data-page="inventory">Ver todos os alimentos →</button></div>
@@ -401,11 +403,11 @@ function renderDashboard() {
         const remaining = daysRemaining(product);
         const status = productStatus(product);
         return `<div class="attention-product"><div class="attention-product-name">${escapeHTML(product.name)}<span class="attention-product-detail">${escapeHTML(categoryName(product.categoryId))}</span></div><div class="attention-metric"><small>QUANTIDADE</small>${number(product.stock)} ${escapeHTML(product.unit)}</div><div class="attention-metric"><small>ESTOQUE MÍNIMO</small>${number(product.minimum)} ${escapeHTML(product.unit)}</div><div class="attention-metric"><small>DIAS RESTANTES</small>${Number.isFinite(remaining) ? `${number(remaining)} dias` : "—"}</div><span class="badge ${status.className}">${status.className === "good" ? "Seguro" : status.className === "warn" ? "Atenção" : "Crítico"}</span></div>`;
-      }).join("")}</div>` : `<div class="empty-state"><strong>Tudo em ordem!</strong>Nenhum alimento precisa de atenção agora.</div>`}
+      }).join("")}</div>` : `<div class="empty-state"><strong>Tudo em ordem!</strong>Nenhum alimento precisa de atenção agora. Você pode seguir com a rotina.</div>`}
     </section>
     <div class="lower-grid">
       <section class="panel"><div class="panel-header"><div><h2>Consumo dos últimos 30 dias</h2><p>Consumo realizado em relação à previsão mensal</p></div><span class="chart-period">${number(products.length, 0)} alimentos</span></div>${consumptionBars30Days(products)}</section>
-      <section class="panel"><div class="panel-header"><div><h2>Últimas movimentações</h2><p>Atividade recente da escola</p></div><button class="text-link" data-page="movements">Ver histórico →</button></div>${movementTable(data.movements.filter((m) => products.some((p) => p.id === m.productId)).slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), false)}</section>
+      <section class="panel"><div class="panel-header"><div><h2>Últimas entradas e saídas</h2><p>Atividade recente da escola</p></div><button class="text-link" data-page="movements">Ver registros →</button></div>${movementTable(data.movements.filter((m) => products.some((p) => p.id === m.productId)).slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), false)}</section>
     </div>`;
 }
 function statCard(title, value, foot, iconName, tone = "") {
@@ -413,7 +415,7 @@ function statCard(title, value, foot, iconName, tone = "") {
 }
 function productUrgency(products) {
   const urgent = products.filter((product) => dailyConsumption(product) > 0).sort((a, b) => daysRemaining(a) - daysRemaining(b)).slice(0, 4);
-  if (!urgent.length) return `<div class="empty-state">Cadastre o consumo dos alimentos para ver a previsão.</div>`;
+  if (!urgent.length) return `<div class="empty-state"><strong>Ainda não há previsão de estoque.</strong>Informe o consumo dos alimentos para ver quantos dias restam.</div>`;
   return `<div class="product-list">${urgent.map((product) => {
     const days = daysRemaining(product);
     const barWidth = Number.isFinite(days) ? Math.min(100, Math.max(5, days / 30 * 100)) : 100;
@@ -422,14 +424,14 @@ function productUrgency(products) {
 }
 function consumptionBars30Days(products = productsForSchool()) {
   const rows = consumptionLast30Days(products);
-  if (!rows.length) return `<div class="empty-state"><strong>Nenhum alimento cadastrado</strong>Cadastre alimentos para acompanhar o consumo.</div>`;
+  if (!rows.length) return `<div class="empty-state"><strong>Ainda não há alimentos cadastrados.</strong>Adicione um alimento para acompanhar o consumo.</div>`;
   return `<div class="consumption-bars">${rows.map(({ product, consumed, monthlyTarget, progress }) => {
     const fillClass = progress > 100 ? "over-target" : "";
     return `<div class="consumption-bar-row"><div class="consumption-bar-heading"><strong>${escapeHTML(product.name)}</strong><span>${number(consumed)} ${escapeHTML(product.unit)} <small>de ${number(monthlyTarget)} ${escapeHTML(product.unit)}</small></span></div><div class="consumption-bar-track" role="progressbar" aria-label="Consumo de ${escapeHTML(product.name)} em relação à previsão mensal" aria-valuenow="${Math.round(progress)}" aria-valuemin="0" aria-valuemax="100"><span class="${fillClass}" style="width:${Math.max(0, Math.min(100, progress))}%"></span></div><span class="consumption-bar-caption">${consumed > 0 ? `${number(progress, 0)}% da previsão mensal` : "Sem saídas registradas nos últimos 30 dias"}</span></div>`;
   }).join("")}</div>`;
 }
 function movementTable(movements, actions = true) {
-  if (!movements.length) return `<div class="empty-state"><strong>Nenhuma movimentação encontrada</strong>Quando houver entradas ou saídas, elas aparecerão aqui.</div>`;
+  if (!movements.length) return `<div class="empty-state"><strong>Ainda não há movimentações registradas.</strong>Registre uma entrada ou saída para começar.</div>`;
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>PRODUTO</th><th>TIPO</th><th>QUANTIDADE</th><th>DATA</th><th>RESPONSÁVEL / MOTIVO</th>${actions ? "<th></th>" : ""}</tr></thead><tbody>${movements.map((movement) => {
     const product = productById(movement.productId);
     return `<tr><td>${escapeHTML(product?.name || "Alimento removido")}<span class="table-sub">${escapeHTML(product ? categoryName(product.categoryId) : "—")}</span></td><td><span class="badge ${movement.type === "entrada" ? "good" : "warn"}">${movement.type === "entrada" ? "Entrada" : "Saída"}</span></td><td>${movement.type === "entrada" ? "+" : "−"}${number(movement.quantity)} ${escapeHTML(product?.unit || "")}</td><td>${dateLabel(movement.date)}</td><td>${escapeHTML(movement.reason || movement.supplier || "—")}</td>${actions ? `<td><button class="small-action" data-action="delete-movement" data-id="${movement.id}" aria-label="Excluir movimentação">Excluir</button></td>` : ""}</tr>`;
@@ -437,28 +439,29 @@ function movementTable(movements, actions = true) {
 }
 function renderInventory() {
   const products = productsForSchool().filter((product) => (categoryFilter === "todas" || product.categoryId === categoryFilter) && `${product.name} ${categoryName(product.categoryId)}`.toLowerCase().includes(searchTerm.toLowerCase()));
-  return `${pageHeading("CONTROLE SIMPLES", "Estoque de alimentos", "Acompanhe quantidades, validade e dias de alimentação.", button("Adicionar alimento", "new-product"))}
+  const hasSchoolProducts = productsForSchool().length > 0;
+  return `${pageHeading("ALIMENTOS", "Alimentos", "Veja o que há no estoque e o que precisa de atenção.", button("Adicionar alimento", "new-product"))}
     <section class="panel"><div class="toolbar"><div class="toolbar-left"><label class="search-box">${icon("search")}<input id="inventory-search" placeholder="Buscar alimento..." value="${escapeHTML(searchTerm)}"></label><select class="filter-select" id="category-filter"><option value="todas" ${categoryFilter === "todas" ? "selected" : ""}>Todas as categorias</option>${data.categories.map((cat) => `<option value="${cat.id}" ${categoryFilter === cat.id ? "selected" : ""}>${escapeHTML(cat.name)}</option>`).join("")}</select></div><div class="toolbar-right"><span class="summary-label">${products.length} alimentos</span></div></div>
-    <div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>QUANTIDADE</th><th>ESTOQUE MÍNIMO</th><th>DIAS RESTANTES</th><th>VALIDADE</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody>${products.length ? products.map((product) => {
+    <div class="inventory-list">${products.length ? products.map((product) => {
     const days = daysRemaining(product), status = productStatus(product);
-    return `<tr><td>${escapeHTML(product.name)}<span class="table-sub">${escapeHTML(categoryName(product.categoryId))} · ${escapeHTML(product.supplier || "Sem fornecedor")}</span></td><td>${number(product.stock)} ${escapeHTML(product.unit)}</td><td>${number(product.minimum)} ${escapeHTML(product.unit)}</td><td>${Number.isFinite(days) ? `${number(days)} dias` : "—"}</td><td>${dateLabel(product.expiration)}</td><td><span class="badge ${status.className}">${status.label}</span></td><td><div class="row-actions"><button class="small-action" data-action="new-movement" data-product="${product.id}">Movimentar</button><button class="small-action" data-action="edit-product" data-id="${product.id}">Editar</button></div></td></tr>`;
-    }).join("") : `<tr><td colspan="7"><div class="empty-state">Nenhum alimento encontrado.</div></td></tr>`}</tbody></table></div></section>`;
+    return `<article class="inventory-card"><div class="inventory-card-header"><div><h2>${escapeHTML(product.name)}</h2><span>${escapeHTML(categoryName(product.categoryId))}</span></div><span class="badge ${status.className}">${status.label}</span></div><div class="inventory-metrics"><div><small>Estoque atual</small><strong>${number(product.stock)} ${escapeHTML(product.unit)}</strong></div><div><small>Estoque mínimo</small><strong>${number(product.minimum)} ${escapeHTML(product.unit)}</strong></div><div><small>Dias restantes</small><strong>${Number.isFinite(days) ? `${number(days)} dias` : "Sem previsão"}</strong></div><div><small>Validade</small><strong>${product.expiration ? dateLabel(product.expiration) : "Não informada"}</strong></div></div><div class="inventory-card-footer"><span class="inventory-supplier">${escapeHTML(product.supplier || "Fornecedor não informado")}</span><div class="row-actions"><button class="small-action" data-action="new-movement" data-product="${product.id}">Registrar movimento</button><button class="small-action" data-action="edit-product" data-id="${product.id}">Editar</button></div></div></article>`;
+    }).join("") : `<div class="empty-state"><strong>${hasSchoolProducts ? "Não encontramos esse alimento." : "Ainda não há alimentos cadastrados."}</strong>${hasSchoolProducts ? "Tente mudar a busca ou a categoria." : "Adicione um alimento para acompanhar o estoque."}</div>`}</div></section>`;
 }
 function renderMovements() {
   const schoolProducts = productsForSchool();
   const productIds = new Set(schoolProducts.map((p) => p.id));
   const movements = data.movements.filter((m) => productIds.has(m.productId)).filter((m) => movementFilters.type === "todos" || m.type === movementFilters.type).filter((m) => movementFilters.productId === "todos" || m.productId === movementFilters.productId).filter((m) => !movementFilters.from || m.date >= movementFilters.from).filter((m) => !movementFilters.to || m.date <= movementFilters.to).sort((a, b) => b.date.localeCompare(a.date));
-  return `${pageHeading("ENTRADAS E SAÍDAS", "Movimentações", "Cada movimentação atualiza o estoque automaticamente.", `${button("Registrar entrada", "new-entry", "secondary", "plus")} ${button("Registrar saída", "new-exit", "primary", "plus")}`)}
+  return `${pageHeading("ENTRADAS E SAÍDAS", "Entradas e saídas", "Registre o que chegou ou foi usado.", `${button("Registrar entrada", "new-entry", "secondary", "plus")} ${button("Registrar saída", "new-exit", "primary", "plus")}`)}
     <section class="panel"><div class="toolbar"><div class="toolbar-left filter-row"><select class="filter-select" id="movement-type"><option value="todos" ${movementFilters.type === "todos" ? "selected" : ""}>Todos os tipos</option><option value="entrada" ${movementFilters.type === "entrada" ? "selected" : ""}>Entradas</option><option value="saida" ${movementFilters.type === "saida" ? "selected" : ""}>Saídas</option></select><select class="filter-select" id="movement-product"><option value="todos" ${movementFilters.productId === "todos" ? "selected" : ""}>Todos os alimentos</option>${schoolProducts.map((p) => `<option value="${p.id}" ${movementFilters.productId === p.id ? "selected" : ""}>${escapeHTML(p.name)}</option>`).join("")}</select><label class="filter-row"><span class="summary-label">De</span><input class="filter-select" type="date" id="movement-from" value="${movementFilters.from}"></label><label class="filter-row"><span class="summary-label">até</span><input class="filter-select" type="date" id="movement-to" value="${movementFilters.to}"></label></div><span class="summary-label">${movements.length} registros</span></div>${movementTable(movements)}</section>`;
 }
 function renderPurchases() {
   const forecast = forecastItems();
   const need = forecast.filter((item) => item.purchase > 0);
   const total = need.reduce((sum, item) => sum + item.purchase * Number(item.product.price || 0), 0);
-  return `${pageHeading("PLANEJAMENTO INTELIGENTE", "O que preciso comprar?", "Uma previsão simples para planejar a merenda do próximo mês.", button("Exportar lista", "export-purchases", "secondary", "download"))}
-    <div class="purchase-callout"><div><strong>Planeje o próximo mês com tranquilidade</strong><p>Estimativa baseada no consumo médio por aluno e nos dias letivos de ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString("pt-BR", { month: "long" })}.</p></div><div class="purchase-total">${money(total)}<small>investimento estimado</small></div></div>
+  return `${pageHeading("COMPRAS", "O que preciso comprar?", "Veja o que falta para a merenda do próximo mês.", button("Exportar lista", "export-purchases", "secondary", "download"))}
+    <div class="purchase-callout"><div><strong>O que falta e quanto custa</strong><p>Estimativa para ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString("pt-BR", { month: "long" })}, com base no consumo e nos dias letivos.</p></div><div class="purchase-total">${money(total)}<small>valor estimado</small></div></div>
     <section class="panel"><div class="summary-strip"><div><div class="summary-label">Alimentos para repor</div><div class="summary-value">${need.length} itens</div></div><div><div class="summary-label">Consumo previsto no mês</div><div class="summary-value">${number(forecast.reduce((sum, item) => sum + item.expected, 0), 0)} un.</div></div><div><div class="summary-label">Dias letivos considerados</div><div class="summary-value">${currentSchool().schoolDays} dias</div></div></div>
-    ${need.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>FORNECEDOR</th><th>CONSUMO PREVISTO</th><th>DISPONÍVEL</th><th>COMPRAR</th><th>VALOR ESTIMADO</th></tr></thead><tbody>${need.map(({ product, expected, available, purchase }) => `<tr><td>${escapeHTML(product.name)}<span class="table-sub">${escapeHTML(categoryName(product.categoryId))}</span></td><td>${escapeHTML(product.supplier || "A definir")}</td><td>${number(expected)} ${escapeHTML(product.unit)}</td><td>${number(available)} ${escapeHTML(product.unit)}</td><td><strong>${number(purchase)} ${escapeHTML(product.unit)}</strong></td><td>${money(purchase * Number(product.price || 0))}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><strong>Estoque suficiente para o próximo mês!</strong>Não há sugestões de compra por enquanto.</div>`}</section>`;
+    ${need.length ? `<div class="table-wrap purchase-table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>FORNECEDOR</th><th>CONSUMO PREVISTO</th><th>DISPONÍVEL</th><th>COMPRAR</th><th>VALOR ESTIMADO</th></tr></thead><tbody>${need.map(({ product, expected, available, purchase }) => `<tr><td data-label="Alimento">${escapeHTML(product.name)}<span class="table-sub">${escapeHTML(categoryName(product.categoryId))}</span></td><td data-label="Fornecedor">${escapeHTML(product.supplier || "A definir")}</td><td data-label="Consumo previsto">${number(expected)} ${escapeHTML(product.unit)}</td><td data-label="Disponível">${number(available)} ${escapeHTML(product.unit)}</td><td data-label="Comprar"><strong>${number(purchase)} ${escapeHTML(product.unit)}</strong></td><td data-label="Valor estimado"><strong>${money(purchase * Number(product.price || 0))}</strong></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><strong>Estoque suficiente para o próximo mês!</strong>Não há itens para comprar agora.</div>`}</section>`;
 }
 function renderReports() {
   const products = productsForSchool();
@@ -469,19 +472,20 @@ function renderReports() {
     return left >= 0 && left <= Number(reportFilter);
   });
   const critical = products.filter((p) => p.stock < p.minimum || daysRemaining(p) < 7);
-  return `${pageHeading("ACOMPANHAMENTO DA ESCOLA", "Relatórios", "Informações organizadas para decisões rápidas.", button("Exportar estoque", "export-stock", "secondary", "download"))}
+  return `${pageHeading("RESUMO DA ESCOLA", "Relatórios", "Consumo, validade e itens que precisam de atenção.", button("Exportar estoque", "export-stock", "secondary", "download"))}
     <div class="toolbar reports-toolbar"><div class="toolbar-left"><select class="filter-select" id="expiry-filter"><option value="7" ${reportFilter === "7" ? "selected" : ""}>Vencendo em 7 dias</option><option value="15" ${reportFilter === "15" ? "selected" : ""}>Vencendo em 15 dias</option><option value="30" ${reportFilter === "30" ? "selected" : ""}>Vencendo em 30 dias</option></select></div><div class="toolbar-right"><button class="secondary-button" data-action="export-movements">${icon("download")} Exportar movimentações</button></div></div>
     <div class="lower-grid">
       <section class="panel"><div class="panel-header"><div><h2>Produtos vencendo</h2><p>Validade nos próximos ${reportFilter} dias</p></div><span class="attention-total">${expiring.length}</span></div>${simpleProductTable(expiring, "Validade")}</section>
-      <section class="panel"><div class="panel-header"><div><h2>Produtos críticos</h2><p>Abaixo do mínimo ou com menos de 7 dias</p></div><span class="attention-total">${critical.length}</span></div>${critical.length ? `<div class="product-list">${critical.map((p) => `<div class="product-row"><div><span class="product-name">${escapeHTML(p.name)}</span><span class="product-sub">${number(p.stock)} ${escapeHTML(p.unit)} · mínimo ${number(p.minimum)}</span></div><div class="days-left">${number(daysRemaining(p))}<span>dias</span></div></div>`).join("")}</div>` : `<div class="empty-state">Nenhum produto crítico.</div>`}</section>
+      <section class="panel"><div class="panel-header"><div><h2>Produtos críticos</h2><p>Abaixo do mínimo ou com menos de 7 dias</p></div><span class="attention-total">${critical.length}</span></div>${critical.length ? `<div class="product-list">${critical.map((p) => `<div class="product-row"><div><span class="product-name">${escapeHTML(p.name)}</span><span class="product-sub">${number(p.stock)} ${escapeHTML(p.unit)} · mínimo ${number(p.minimum)}</span></div><div class="days-left">${number(daysRemaining(p))}<span>dias</span></div></div>`).join("")}</div>` : `<div class="empty-state"><strong>Nenhum alimento precisa de reposição urgente.</strong>Os itens críticos aparecerão aqui quando necessário.</div>`}</section>
     </div>
     <section class="panel section-spacer"><div class="panel-header"><div><h2>Consumo por alimento</h2><p>Estimativa diária, semanal e mensal</p></div></div>${consumptionReportTable(products)}</section>
-    <section class="panel section-spacer"><div class="panel-header"><div><h2>Alertas automáticos</h2><p>Inclui estoque, validade e falta de movimentação</p></div><span class="attention-total">${alerts.length}</span></div>${alerts.length ? `<div class="product-list">${alerts.map((a) => `<div class="product-row"><div><span class="product-name">${escapeHTML(a.product.name)} · ${escapeHTML(a.label)}</span><span class="product-sub">${escapeHTML(a.detail)}</span></div><span class="badge ${a.tone === "red" ? "danger" : "warn"}">${a.tone === "red" ? "Atenção" : "Aviso"}</span></div>`).join("")}</div>` : `<div class="empty-state">Nenhum alerta por enquanto.</div>`}</section>`;
+    <section class="panel section-spacer"><div class="panel-header"><div><h2>Alertas automáticos</h2><p>Inclui estoque, validade e falta de movimentação</p></div><span class="attention-total">${alerts.length}</span></div>${alerts.length ? `<div class="product-list">${alerts.map((a) => `<div class="product-row"><div><span class="product-name">${escapeHTML(a.product.name)} · ${escapeHTML(a.label)}</span><span class="product-sub">${escapeHTML(a.detail)}</span></div><span class="badge ${a.tone === "red" ? "danger" : "warn"}">${a.tone === "red" ? "Atenção" : "Aviso"}</span></div>`).join("")}</div>` : `<div class="empty-state"><strong>Nenhum alerta por enquanto.</strong>Se algo precisar de atenção, você verá por aqui.</div>`}</section>`;
 }
 function simpleProductTable(products, finalHeading) {
-  return products.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>QUANTIDADE</th><th>${finalHeading.toUpperCase()}</th></tr></thead><tbody>${products.map((p) => `<tr><td>${escapeHTML(p.name)}<span class="table-sub">${escapeHTML(categoryName(p.categoryId))}</span></td><td>${number(p.stock)} ${escapeHTML(p.unit)}</td><td>${dateLabel(p.expiration)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state">Nenhum alimento vencendo neste período.</div>`;
+  return products.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>QUANTIDADE</th><th>${finalHeading.toUpperCase()}</th></tr></thead><tbody>${products.map((p) => `<tr><td>${escapeHTML(p.name)}<span class="table-sub">${escapeHTML(categoryName(p.categoryId))}</span></td><td>${number(p.stock)} ${escapeHTML(p.unit)}</td><td>${dateLabel(p.expiration)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><strong>Nenhum alimento vencendo neste período.</strong>Quando houver itens próximos da validade, eles aparecerão aqui.</div>`;
 }
 function consumptionReportTable(products) {
+  if (!products.length) return `<div class="empty-state"><strong>Ainda não há alimentos cadastrados.</strong>Adicione alimentos para acompanhar o consumo.</div>`;
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>CONSUMO DIÁRIO</th><th>SEMANAL</th><th>MENSAL</th><th>ESTOQUE</th><th>DIAS RESTANTES</th></tr></thead><tbody>${products.map((p) => {
     const daily = dailyConsumption(p);
     return `<tr><td>${escapeHTML(p.name)}</td><td>${number(daily)} ${escapeHTML(p.unit)}</td><td>${number(daily * 5)} ${escapeHTML(p.unit)}</td><td>${number(daily * currentSchool().schoolDays)} ${escapeHTML(p.unit)}</td><td>${number(p.stock)} ${escapeHTML(p.unit)}</td><td>${Number.isFinite(daysRemaining(p)) ? `${number(daysRemaining(p))} dias` : "—"}</td></tr>`;
@@ -490,7 +494,7 @@ function consumptionReportTable(products) {
 function renderRegisters() {
   const school = currentSchool();
   const schoolProducts = productsForSchool();
-  return `${pageHeading("CONFIGURAÇÕES", "Cadastros", "Mantenha os dados da escola e dos alimentos sempre atualizados.", button("Adicionar escola", "new-school"))}
+  return `${pageHeading("ESCOLA", "Dados da escola", "Mantenha atualizadas as informações da escola e dos alimentos.", button("Adicionar escola", "new-school"))}
     <div class="register-intro"><strong>Uma gestão mais simples começa com os dados certos.</strong><p>Cadastre suas escolas, organize as categorias e mantenha as informações dos alimentos atualizadas.</p></div>
     <div class="register-grid">
       <section class="panel register-card"><div class="panel-header"><div><h2>${escapeHTML(school.name)}</h2><p>Dados da escola selecionada</p></div><button class="text-link" data-action="edit-school" data-id="${school.id}">Editar escola</button></div><div class="register-list"><div class="register-item"><div><strong>Localização</strong><small>${escapeHTML(school.city)}, ${escapeHTML(school.state)}</small></div></div><div class="register-item"><div><strong>Quantidade de alunos</strong><small>${number(school.students, 0)} alunos · ${school.schoolDays} dias letivos/mês</small></div></div><div class="register-item"><div><strong>Responsável</strong><small>${escapeHTML(school.manager)}</small></div></div><div class="register-item"><div><strong>Alimentos cadastrados</strong><small>${schoolProducts.length} itens vinculados</small></div></div></div></section>
@@ -593,7 +597,7 @@ function renderMenuPlanning() {
       ${preparations.length ? `<div class="preparation-grid">${preparations.map((preparation) => `<article class="preparation-card"><div class="preparation-card-top"><div><h3>${escapeHTML(preparation.name)}</h3><span>${number(preparation.servings, 0)} porções por receita · ${preparation.active ? "Ativa" : "Inativa"}</span></div><button class="small-action" data-action="edit-preparation" data-id="${escapeHTML(preparation.id)}">Editar</button></div><p>${escapeHTML(preparation.description || "Sem descrição")}</p>${preparation.method ? `<details class="preparation-method"><summary>Modo de preparo</summary><p>${escapeHTML(preparation.method)}</p></details>` : ""}<div class="preparation-ingredients">${preparation.ingredients.map((ingredient) => {
         const product = productById(ingredient.productId);
         return `<span>${escapeHTML(product?.name || "Alimento removido")} · ${number(ingredient.quantity)} ${escapeHTML(ingredient.unit)}</span>`;
-      }).join("")}</div></article>`).join("")}</div>` : `<div class="empty-state"><strong>Cadastre sua primeira preparação</strong>Inclua ingredientes usando os alimentos existentes no estoque.</div>`}
+      }).join("")}</div></article>`).join("")}</div>` : `<div class="empty-state"><strong>Ainda não há preparações cadastradas.</strong>Crie uma preparação usando os alimentos desta escola.</div>`}
     </section>
     <section class="panel section-spacer"><div class="panel-header"><div><h2>Refeições planejadas</h2><p>As quantidades previstas são calculadas proporcionalmente ao número de alunos.</p></div><button class="text-link" data-menu-section="calendar">Abrir calendário →</button></div>${menuPlanList(menuPlansForMonth())}</section>`;
 }
@@ -633,7 +637,7 @@ function renderMenuCalendarGrid() {
   }).join("")}</div>`;
 }
 function menuPlanList(plans) {
-  if (!plans.length) return `<div class="empty-state"><strong>Nenhuma refeição planejada</strong>Use “Planejar refeição” para adicionar uma preparação ao calendário.</div>`;
+  if (!plans.length) return `<div class="empty-state"><strong>Ainda não há refeições planejadas.</strong>Planeje uma refeição para começar a montar o cardápio.</div>`;
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>DATA</th><th>TURNO</th><th>PREPARAÇÃO</th><th>INGREDIENTES</th><th></th></tr></thead><tbody>${plans.map((plan) => {
     const preparation = (data.preparations || []).find((item) => item.id === plan.preparationId);
     return `<tr><td>${dateLabel(plan.date)}</td><td>${escapeHTML(plan.shift)}</td><td>${escapeHTML(preparation?.name || "Preparação removida")}</td><td>${preparation?.ingredients.length || 0} ingredientes</td><td><div class="row-actions"><button class="small-action" data-action="edit-menu-plan" data-id="${escapeHTML(plan.id)}">Editar</button><button class="small-action" data-action="delete-menu-plan" data-id="${escapeHTML(plan.id)}">Remover</button></div></td></tr>`;
@@ -649,7 +653,7 @@ function renderMenuConsumption() {
     ${menuConsumptionTable(rows)}</section>`;
 }
 function menuConsumptionTable(rows) {
-  if (!rows.length) return `<div class="empty-state"><strong>Sem consumo previsto</strong>Planeje refeições para calcular os ingredientes necessários.</div>`;
+  if (!rows.length) return `<div class="empty-state"><strong>Ainda não há consumo previsto.</strong>Planeje refeições para ver os ingredientes necessários.</div>`;
   return `<div class="table-wrap"><table class="data-table"><thead><tr><th>ALIMENTO</th><th>NECESSIDADE PREVISTA</th><th>ESTOQUE ATUAL</th><th>SALDO APÓS CARDÁPIO</th><th>DIAS DE COBERTURA</th><th>STATUS</th></tr></thead><tbody>${rows.map(({ product, needed, available, difference, coverageDays, status }) => `<tr><td>${escapeHTML(product.name)}<span class="table-sub">${escapeHTML(categoryName(product.categoryId))}</span></td><td>${number(needed)} ${escapeHTML(product.unit)}</td><td>${number(available)} ${escapeHTML(product.unit)}</td><td class="${difference < 0 ? "menu-negative" : ""}">${number(difference)} ${escapeHTML(product.unit)}</td><td>${Number.isFinite(coverageDays) ? `${number(coverageDays)} dias` : "—"}</td><td>${menuStatus(status)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function renderMenuPurchases() {
@@ -820,7 +824,7 @@ function chooseMovementType(productId = "") {
     { value: "entrada", label: "Entrada" },
     { value: "saida", label: "Saída" },
   ];
-  openModal("Nova movimentação", "Escolha o tipo de movimentação que deseja registrar.", `<div class="form-grid">${field("Tipo", "type", "entrada", "select", options, true)}</div>`, (values) => {
+  openModal("O que deseja registrar?", "Escolha entre uma entrada ou uma saída.", `<div class="form-grid">${field("Tipo", "type", "entrada", "select", options, true)}</div>`, (values) => {
     closeModal();
     newMovement(values.type, productId);
   }, "Continuar");
@@ -928,6 +932,12 @@ function importBackup(file) {
 }
 
 document.addEventListener("click", (event) => {
+  const moreMenu = document.getElementById("mobile-more-menu");
+  const moreTrigger = document.getElementById("mobile-more-trigger");
+  if (moreMenu?.classList.contains("open") && !moreMenu.contains(event.target) && !moreTrigger?.contains(event.target)) {
+    moreMenu.classList.remove("open");
+    moreTrigger?.setAttribute("aria-expanded", "false");
+  }
   const menuSectionButton = event.target.closest("[data-menu-section]");
   if (menuSectionButton) {
     menuSection = menuSectionButton.dataset.menuSection;
@@ -945,6 +955,8 @@ document.addEventListener("click", (event) => {
   const mobileNav = event.target.closest(".mobile-tab[data-page]");
   if (nav || mobileNav) {
     activePage = (nav || mobileNav).dataset.page;
+    document.getElementById("mobile-more-menu")?.classList.remove("open");
+    document.getElementById("mobile-more-trigger")?.setAttribute("aria-expanded", "false");
     searchTerm = "";
     render();
     return;
@@ -981,6 +993,11 @@ document.addEventListener("click", (event) => {
   else if (action === "export-purchases") exportPurchases();
   else if (action === "export-movements") exportMovements();
   else if (action === "export-backup") exportBackup();
+  else if (action === "toggle-mobile-more") {
+    const menu = document.getElementById("mobile-more-menu");
+    const isOpen = menu.classList.toggle("open");
+    target.setAttribute("aria-expanded", String(isOpen));
+  }
   else if (action === "delete-movement") {
     const movement = data.movements.find((item) => item.id === id);
     if (!movement || !window.confirm("Excluir esta movimentação e reverter seu efeito no estoque?")) return;
